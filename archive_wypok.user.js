@@ -21,7 +21,7 @@ function main() {
 
     var saveFile = (function () {
         var a = document.createElement("a");
-        a.style = 'display: none';
+        a.setAttribute('style', 'display: none');
         return function (data, mimeType, fileName) {
             var blob = new Blob([data], {type: 'application/octet-stream'}),
                 url = window.URL.createObjectURL(blob);
@@ -34,7 +34,7 @@ function main() {
                 setTimeout(function () {
                     URL.revokeObjectURL(url);
                 }, 1500);
-            }, 500);
+            }, 250);
         };
     }());
 
