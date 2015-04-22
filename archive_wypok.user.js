@@ -4,7 +4,7 @@
 // @include     http://www.wykop.pl/wpis/*/*
 // @include     http://www.wykop.pl/mikroblog/
 // @include     http://www.wykop.pl/ustawienia/
-// @version     1.3
+// @version     1.5.0
 // @downloadURL https://ginden.github.io/wypok_scripts/archive_wypok.user.js
 // @grant       none
 // ==/UserScript==
@@ -17,11 +17,21 @@ document.body.appendChild(script);
 function main() {
     (function clearAds() {
         $('*[id|=bmone2n], iframe[id|=gemius]').remove();
+        localStorage.removeItem('BProfiler');
+        localStorage.removeItem('ibbid');
+        document.cookie = 'ibbid=;expires=Thu, 01 Jan 1970 00:00:01 GMT;';
+        document.cookie = '__utmmobile=;expires=Thu, 01 Jan 1970 00:00:01 GMT;';
+        document.cookie = 'JSESSIONIDN=;expires=Thu, 01 Jan 1970 00:00:01 GMT;';
+        document.cookie = '_gat=;expires=Thu, 01 Jan 1970 00:00:01 GMT;';
+        document.cookie = '_ga=;expires=Thu, 01 Jan 1970 00:00:01 GMT;';
     })();
+    function isDebug() {
+        return location.hash === '#debug';
+    }
 
     var saveFile = (function () {
         var a = document.createElement("a");
-        a.setAttribute('style', 'display: none');
+        a.style = 'display: none';
         return function (data, mimeType, fileName) {
             var blob = new Blob([data], {type: 'application/octet-stream'}),
                 url = window.URL.createObjectURL(blob);
@@ -34,7 +44,7 @@ function main() {
                 setTimeout(function () {
                     URL.revokeObjectURL(url);
                 }, 1500);
-            }, 250);
+            }, 500);
         };
     }());
 
@@ -132,7 +142,6 @@ function main() {
         var entry = {};
         $entry = $entry || $('#itemsStream > li > div[data-type="entry"]');
         entry.id = Number($entry.attr('data-id'));
-        console.log(entry.id);
         entry.author = $('.author a.showProfileSummary b', $entry).text().trim();
         entry.parent_id = null;
         entry.hasImage = !!$('.media-content', $entry).length;
@@ -180,13 +189,13 @@ function main() {
             entry_votes.concat(($('.showVotes', $comment).length && entry.votesCount) ? [].map.call($('.voters-list a'), function (el) {
                 return {author: el.textContent.trim(), parent_id: entry.id};
             }) : []);
-            //   console.log(comment);
+
             return comment;
         });
         entries.push(entry);
-
+        isDebug() && console.log(entries);
         logEntries(entries);
-        logVotes(entry_votes);
+        // logVotes(entry_votes);
     }
 
     function logEntries(entries) {
@@ -200,9 +209,9 @@ function main() {
                         store.put(entry.id, entry, Function());
                     } else {
                         if (hashObject(entry) !== hashObject(oldEntry)) {
-                            store.del(entry.id, function (err, data) {
+                            store.del(entry.id, function (err) {
                                 if (err) {
-                                    console.error(err);
+                                    isDebug() && console.error(err);
                                 }
                                 else {
                                     store.put(entry.id, entry, Function());
