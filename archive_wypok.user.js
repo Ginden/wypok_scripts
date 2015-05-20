@@ -5,7 +5,7 @@
 // @include     http://www.wykop.pl/mikroblog/
 // @include     http://www.wykop.pl/ustawienia/
 // @version     1.2
-// @downloadURL https://gist.githubusercontent.com/Ginden/ae136dcf75f074733032/raw/wypok_archive.user.js
+// @downloadURL https://ginden.github.io/wypok_scripts/archive_wypok.user.js
 // @grant       none
 // ==/UserScript==
 
