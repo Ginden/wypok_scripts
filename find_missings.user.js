@@ -2,23 +2,39 @@
 // @name        Find missings
 // @namespace   find_channels
 // @include     http://www.wykop.pl/mikroblog/
-// @version     1.4
-// @downloadURL https://ginden.github.io/wypok_scripts/find_missings.user.js
+// @version     1.3
+// @downloadURL https://gist.githubusercontent.com/Ginden/1700ba4e4a86edb4b59c/raw/find_missings.user.js
 // @grant       none
 // ==/UserScript==
+
 
 "use strict";
 var script = document.createElement("script");
 script.textContent = "(" + main.toString() + ")();";
 document.body.appendChild(script);
 function main() {
+
+    if (window.wykop) {
+        window.wykop.plugins = window.wykop.plugins || {};
+        window.wykop.plugins.Ginden = window.wykop.plugins.Ginden || {};
+        window.wykop.plugins.Ginden.SearchChannels = {};
+    }
+
+    function getWypokArchive() {
+        return (
+        (window.wykop && window.wykop.plugins.Ginden.Archive)
+        ||
+        (window.WypokArchive)
+        )
+    }
+
     var itemsStream = document.querySelector('#itemsStream');
     var items = 0;
     var processed = {};
     var displayed = {};
     var checked = {};
-    var allMisses = window.widows = {};
-    var htmlEntries = window.htmlEntries = {};
+    var allMisses = {};
+    var htmlEntries = {};
     var currentUser = $('.logged-user > a > img.avatar').attr('alt');
     var storage = currentUser ? localStorage : sessionStorage;
     var maxId = -Infinity;
@@ -161,12 +177,12 @@ function main() {
                             htmlEntries[id].querySelector('.status_indicator').textContent = '\u2718';
                             htmlEntries[id].querySelector('.status_indicator').setAttribute('style', 'color: red');
                         } else {
-                            if (window.WypokArchive && window.WypokArchive.updateData) {
-                                window.WypokArchive.updateData($entry);
+                            if (getWypokArchive() && getWypokArchive().updateData) {
+                                getWypokArchive().updateData($entry);
                             } else if (document.querySelector('#treo_script')) {
                                 setTimeout(function q() {
-                                    if (window.WypokArchive && window.WypokArchive.updateData) {
-                                        window.WypokArchive.updateData($entry);
+                                    if (getWypokArchive()) {
+                                        getWypokArchive().updateData($entry);
                                     } else {
                                         setTimeout(q, 100);
                                     }
