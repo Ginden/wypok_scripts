@@ -4,7 +4,7 @@
 // @include     http://www.wykop.pl/wpis/*/*
 // @include     http://www.wykop.pl/mikroblog/
 // @include     http://www.wykop.pl/ustawienia/
-// @version     1.2
+// @version     1.4
 // @downloadURL https://ginden.github.io/wypok_scripts/archive_wypok.user.js
 // @grant       none
 // ==/UserScript==

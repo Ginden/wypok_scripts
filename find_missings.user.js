@@ -2,7 +2,7 @@
 // @name        Find missing entries
 // @namespace   find_channels
 // @include     http://www.wykop.pl/mikroblog/
-// @version     1.3
+// @version     1.4
 // @downloadURL https://ginden.github.io/wypok_scripts/find_missings.user.js
 // @grant       none
 // ==/UserScript==

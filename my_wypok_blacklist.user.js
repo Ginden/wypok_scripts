@@ -3,7 +3,7 @@
 // @namespace   my_wykop_blacklists
 // @include     http://www.wykop.pl/moj/*
 // @include     http://www.wykop.pl/tag/*
-// @version     1.1.0
+// @version     1.2.0
 // @grant       none
 // @downloadURL https://ginden.github.io/wypok_scripts/blacklist.user.js
 // @license CC BY-SA 3.0
