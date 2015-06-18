@@ -3,7 +3,8 @@
 // @namespace   my_wykop_blacklists
 // @include     http://www.wykop.pl/moj/*
 // @include     http://www.wykop.pl/tag/*
-// @version     1.2.0
+// @include     http://www.wykop.pl/ustawienia/czarne-listy/
+// @version     1.3.0
 // @grant       none
 // @downloadURL https://ginden.github.io/wypok_scripts/blacklist.user.js
 // @license CC BY-SA 3.0
@@ -34,6 +35,7 @@ function main() {
     }
 
     function getBlackList(callback) {
+
         callback = callback || Function.prototype;
         if (localStorage['black_list_' + currentDate]) {
             callback(JSON.parse(localStorage['black_list_' + currentDate]));
@@ -68,7 +70,7 @@ function main() {
                 return true;
             }
             return false;
-        }).addClass('ginden_black_list');
+        }).toggleClass('ginden_black_list', true);
 
     }
 
@@ -100,7 +102,38 @@ function main() {
         $('.fix-b-border > ul').last().append(
             $('<li id="black_list_toggle_cont">').append($input, $label)
         );
+    } else if (window.wykop && wykop.params && wykop.params.action === "settings" && wykop.params.method === "blacklists") {
+        var p = document.querySelector('div.space[data-type="users"]');
+        var childs = [].slice.call(p.children);
+        var colorSortOrder = {
+            1002: 100, //konto usunięte
+            1001: 90, // konto zbanowane
+            2001: 80, // sponosorwane
+            5: 80, // admin
+            2: 70, //bordo
+            1: 60, // pomarańcza
+            0: 50,
+            null: 0
+        };
+        childs.filter(function(el){
+            el.nick = el.textContent.toLowerCase().trim();
+            var aColor = el.querySelector('span[class*=color]') || null;
+            el.color = colorSortOrder[(aColor && aColor.getAttribute('class').slice('color-'.length))]|0;
+            el.prevColor = (localStorage['black_list_user_color_'+el.nick] || el.color)|0;
+            el.prioritize = 0;
+            if (el.prevColor !== el.color && (el.color === 1002 || el.color === 1001)) {
+                el.prioritize = 1;
+                el.setAttribute(el.getAttribute('class')+' type-light-warning');
+            }
+            localStorage['black_list_user_color_'+el.nick] = el.color;
+            return el;
+        }).sort(function(a,b) {
+            return (a.prioritize > b.prioritize) ? 1 : (a.color === b.color) ? (a.nick > b.nick ? 1 : -1) : (a.color < b.color ? 1 : -1);
+        }).forEach(function(el) {
+            p.appendChild(el);
+        });
     }
+
 
     if (window.wykop) {
         window.wykop.plugins = window.wykop.plugins || {};
@@ -108,7 +141,10 @@ function main() {
         window.wykop.plugins.Ginden.MojWykopBlackList = {
             setSwitch: function(state){
                 $input.prop('checked', !!state);
-            }
+            },
+            parseBlackList: parseBlackList,
+            getBlackList: getBlackList,
+            removeEntries: removeEntries
         };
     }
 
