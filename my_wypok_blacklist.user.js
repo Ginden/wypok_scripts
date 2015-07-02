@@ -5,7 +5,8 @@
 // @include     http://www.wykop.pl/tag/*
 // @include     http://www.wykop.pl/ustawienia/czarne-listy/
 // @include     http://www.wykop.pl/ludzie/*
-// @version     1.4.1
+// @include     http://www.wykop.pl/mikroblog/kanal/*
+// @version     1.6.0
 // @grant       none
 // @downloadURL https://ginden.github.io/wypok_scripts/my_wypok_blacklist.user.js
 // @license CC BY-SA 3.0
@@ -15,6 +16,19 @@
 function main() {
 
     var currentDate = (new Date()).toDateString();
+
+    var colorSortOrder = {
+        1002: 100, //konto usunięte
+        1001: 90, // konto zbanowane
+        2001: 80, // sponosorwane
+        5:    80, // admin
+        2:    70, //bordo
+        1:    60, // pomarańcza
+        0:    50,
+        null: 0
+    };
+
+
 
     function parseBlackList(callback) {
         $.ajax({
@@ -62,6 +76,25 @@ function main() {
         }
     }
 
+    function sortBlackListEntries(entriesContainer) {
+        var childs = [].slice.call(entriesContainer.children);
+
+        childs.map(function (el) {
+            el.nick = el.textContent.toLowerCase().trim();
+            var aColor = el.querySelector('span[class*=color]') || null;
+            var rawColor = (aColor && aColor.getAttribute('class').slice('color-'.length)) | 0;
+            el.color = colorSortOrder[rawColor] | 0;
+            el.prevColor = (localStorage['black_list/user/' + el.nick + '/color'] || el.color) | 0;
+            el.prioritize = 0;
+            if (el.prevColor !== el.color) {
+                el.setAttribute('class', el.getAttribute('class') + ' type-light-warning');
+            }
+            localStorage['black_list/user/' + el.nick + '/color'] = el.color;
+            return el;
+        }).sort(sortUsersLis).forEach(function (el) {
+            entriesContainer.appendChild(el);
+        });
+    }
 
     function removeEntries(blackLists) {
         var entries = $('#itemsStream .entry').filter(function (i, el) {
@@ -104,50 +137,36 @@ function main() {
 
 
     document.head.appendChild(style);
-    if (window.wykop && window.wykop.params && window.wykop.params.action === 'mywykop') {
-        $('.bspace ul').last().append($('<li id="black_list_toggle_cont">').append($input, $label));
-        getBlackList(removeEntries);
-    } else if (window.wykop && window.wykop.params && window.wykop.params.action === 'tag') {
-        getBlackList(removeEntries);
-        $('.fix-b-border > ul').last().append(
-            $('<li id="black_list_toggle_cont">').append($input, $label)
-        );
-    } else if (window.wykop && wykop.params && wykop.params.action === "profile") {
-        $('h4.space').last().append(
-            $('<span id="black_list_toggle_cont">').append($input, $label)
-        );
-        getBlackList(removeEntries);
-    } else if (window.wykop && wykop.params && wykop.params.action === "settings" && wykop.params.method === "blacklists") {
-        var p = document.querySelector('div.space[data-type="users"]');
-        var childs = [].slice.call(p.children);
-        var colorSortOrder = {
-            1002: 100, //konto usunięte
-            1001: 90, // konto zbanowane
-            2001: 80, // sponosorwane
-            5:    80, // admin
-            2:    70, //bordo
-            1:    60, // pomarańcza
-            0:    50,
-            null: 0
-        };
-        childs.map(function (el) {
-            el.nick = el.textContent.toLowerCase().trim();
-            var aColor = el.querySelector('span[class*=color]') || null;
-            var rawColor = (aColor && aColor.getAttribute('class').slice('color-'.length)) | 0;
-            el.color = colorSortOrder[rawColor] | 0;
-            el.prevColor = (localStorage['black_list/user/' + el.nick + '/color'] || el.color) | 0;
-            el.prioritize = 0;
-            if (el.prevColor !== el.color) {
-                el.setAttribute('class', el.getAttribute('class') + ' type-light-warning');
-            }
-            localStorage['black_list/user/' + el.nick + '/color'] = el.color;
-            return el;
-        }).sort(sortUsersLis).forEach(function (el) {
-            p.appendChild(el);
-        });
+    if (window.wykop && window.wykop.params) {
+        if (wykop.params.action === 'mywykop') {
+            $('.bspace ul').last().append($('<li id="black_list_toggle_cont">').append($input, $label));
+            getBlackList(removeEntries);
+        } else if (wykop.params.action === 'tag') {
+            getBlackList(removeEntries);
+            $('.fix-b-border > ul').last().append(
+                $('<li id="black_list_toggle_cont">').append($input, $label)
+            );
+        } else if (wykop.params.action === "profile") {
+            $('h4.space').last().append(
+                $('<span id="black_list_toggle_cont">').append($input, $label)
+            );
+            getBlackList(removeEntries);
+        } else if (wykop.params.action === 'stream' && wykop.params.method === 'index' && location.pathname.indexOf('/mikroblog/kanal/') === 0) {
+            $('.bspace ul').last().append($('<li id="black_list_toggle_cont">').append($input, $label));
+            getBlackList(removeEntries);
+        } else if (wykop.params.action === "settings" && wykop.params.method === "blacklists") {
+            var entriesContainer = document.querySelector('div.space[data-type="users"]');
+            sortBlackListEntries(entriesContainer);
+
+        } else if (wykop.params.action === 'error' && wykop.params.method === '404' && location.pathname.match(/\/ludzie\/.*\//)) {
+            var user = (location.pathname.match(/\/ludzie\/(.*)\//) || [])[1];
+            $('h4.bspace + p > a.button').after(
+                $('<span class="dC" data-type="profile" data-id="'+user+'" />').append(
+                    $('<a class="btnNotify button"><i class="fa fa-flag"></i></a>')
+                )
+            );
+        }
     }
-
-
     if (window.wykop) {
         window.wykop.plugins = window.wykop.plugins || {};
         window.wykop.plugins.Ginden = window.wykop.plugins.Ginden || {};
