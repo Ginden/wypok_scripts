@@ -7,7 +7,7 @@
 // @include     http://www.wykop.pl/ludzie/*
 // @version     1.4.1
 // @grant       none
-// @downloadURL https://ginden.github.io/wypok_scripts/blacklist.user.js
+// @downloadURL https://ginden.github.io/wypok_scripts/my_wypok_blacklist.user.js
 // @license CC BY-SA 3.0
 // ==/UserScript==
 
