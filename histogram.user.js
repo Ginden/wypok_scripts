@@ -2,7 +2,7 @@
 // @name        Wykop histogram
 // @namespace   wykop_ginden_histogram
 // @include     http://www.wykop.pl/ludzie/*/
-// @version     1.1.0
+// @version     1.3.0
 // @downloadURL https://ginden.github.io/wypok_scripts/histogram.user.js
 // @grant       none
 // ==/UserScript==
@@ -36,13 +36,13 @@ function main() {
         window.wykop.plugins.Ginden = window.wykop.plugins.Ginden || {};
         window.wykop.plugins.Ginden.Histogram = {};
     }
-    var max_pages = 3;
+    var max_pages = Number(localStorage.histogram_max_pages) || 7;
     var maxOld = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
-    var sessionKey = '4sQKG1oCry';
+    var sessionKey = localStorage.histogram_appkey ? localStorage.histogram_appkey : function(){console.warn('no appkey specified'); throw new TypeError();};
     var chartIcon = '<svg height="1000" width="1071.429" xmlns="http://www.w3.org/2000/svg"><path d="M285.696 571.456v214.272h-142.848v-214.272h142.848zm214.272 -285.696v499.968h-142.848v-499.968h142.848zm214.272 142.848v357.12h-142.848v-357.12h142.848zm214.272 -214.272v571.392h-142.848v-571.392h142.848zm71.424 624.96v-678.528q0 -7.254 -5.301 -12.555t-12.555 -5.301h-892.8q-7.254 0 -12.555 5.301t-5.301 12.555v678.528q0 7.254 5.301 12.555t12.555 5.301h892.8q7.254 0 12.555 -5.301t5.301 -12.555zm71.424 -678.528v678.528q0 36.828 -26.226 63.054t-63.054 26.226h-892.8q-36.828 0 -63.054 -26.226t-26.226 -63.054v-678.528q0 -36.828 26.226 -63.054t63.054 -26.226h892.8q36.828 0 63.054 26.226t26.226 63.054z"/></svg>';
     var blob = new Blob([chartIcon], {type: "image/svg+xml;charset=utf-8"});
     var blobUrl = URL.createObjectURL(blob);
-
+    var smooth = true;
     var ERR = {
         LAST_PAGE: Object.freeze(Object.create(null))
     };
@@ -79,6 +79,8 @@ function main() {
 
     function handleHistogram(e) {
         e.preventDefault();
+        document.body.style.opacity = 0.25;
+        document.body.style.pointerEvents = 'none';
         var chartsScript = document.createElement('script');
         chartsScript.src = 'https://www.google.com/jsapi';
         document.body.appendChild(chartsScript);
@@ -131,11 +133,22 @@ function main() {
             bucketsCont[hourRoundString(bucket)] = [];
         });
         arr.forEach(function(el) {
-            bucketsCont[hourRoundString(el.time)].push(el);
+            if(bucketsCont[hourRoundString(el.time)]) {
+                bucketsCont[hourRoundString(el.time)].push(el);
+            } else {
+                console.log('Out of range', el);
+            }
+            
         });
         var res = Object.keys(bucketsCont).map(function(key) {
             return [key, bucketsCont[key].length];
+        }).map(function(el, i, arr){
+            if (arr[i+1] && el[1] === 0) {
+                el[1] = (arr[i+1][1])*0.25;
+            }
+            return el;
         });
+
         return [
             ['Date', 'Activities']
         ].concat(res);
@@ -144,13 +157,16 @@ function main() {
     function displayChart(dataTable) {
         google.load("visualization", "1", {packages:["corechart"], callback: drawChart});
         function drawChart() {
+            document.body.style.opacity = 1;
+            document.body.style.pointerEvents = 'auto';
             var data = google.visualization.arrayToDataTable(dataTable);
 
             var options = {
                 title: profile+' Activity',
                 legend: { position: 'bottom' },
                 width: document.body.clientWidth - 100,
-                height: 600
+                height: 600,
+                curveType: smooth ? 'function' : 'none'
             };
 
             var chart = new google.visualization.LineChart(document.body);
@@ -174,7 +190,7 @@ function main() {
                             unique[act.type + '-' + act.id] = act;
                         });
                         act = Object.keys(unique).map(function (k) {
-                            return unique[k]
+                            return unique[k];
                         }).sort(function (a, b) {
                             return a.time - b.time;
                         });
@@ -343,19 +359,41 @@ function main() {
             if (page > max_pages) {
                 return done(ERR.LAST_PAGE);
             }
-            done(ERR.LAST_PAGE);
+            var url = 'http://www.wykop.pl/ludzie/plusowane-wpisy/'+profile+'/strona/'+page+'/';
+            $.ajax({url: url, method: 'get', dataType: 'html'}).done(function(data) {
+                var $data = $(data);
+                var origEntries = [].map.call($('#itemsStream div[data-type=entry]'), function(el){
+                    return Number(el.getAttribute('data-id'));
+                });
+                var entries = origEntries.slice();
+                (function nextEntry(entry) {
+                    if (entry) {
+                        readEntry(entry, function (err) {
+                            if (err) {
+                                done(err);
+                                return;
+                            }
+                            nextEntry(entries.pop());
+                        })
+                    } else {
+                        done(origEntries.length === 0 ? ERR.LAST_PAGE : null);
+                    }
+                }(entries.pop()));
+            }).fail(done);
+
         }
     };
 
     function readEntry(id, done) {
+        if (checkedEntries[id]) return done();
         var url = 'http://a.wykop.pl/entries/index/' + id + '/appkey/' + sessionKey + '/';
         $.ajax(mergeObjects({url: url}, apiOptions)).done(function (data) {
-            if (data.err) {
-                done(data);
+            if (data.error) {
+                done(data.error.code === 63 ? null : data);
                 return
             }
-            data.voters.forEach(VoteHandler(data.id, 'entry'));
-            data.comments.forEach(EntryCommentHandler());
+            data.voters ? data.voters.forEach(VoteHandler(data.id, 'entry')) : console.log(data);
+            data.comments ? data.comments.forEach(EntryCommentHandler()) : console.log(data);
             checkedEntries[data.id] = true;
             done();
         }).fail(done);
