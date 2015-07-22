@@ -2,7 +2,7 @@
 // @name        Wykop histogram
 // @namespace   wykop_ginden_histogram
 // @include     http://www.wykop.pl/ludzie/*/
-// @version     1.0.0
+// @version     1.1.0
 // @downloadURL https://ginden.github.io/wypok_scripts/histogram.user.js
 // @grant       none
 // ==/UserScript==
@@ -36,9 +36,9 @@ function main() {
         window.wykop.plugins.Ginden = window.wykop.plugins.Ginden || {};
         window.wykop.plugins.Ginden.Histogram = {};
     }
-    var max_pages = 1;
+    var max_pages = 3;
     var maxOld = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
-    var sessionKey = 'SBUO6Q1ncK';
+    var sessionKey = '4sQKG1oCry';
     var chartIcon = '<svg height="1000" width="1071.429" xmlns="http://www.w3.org/2000/svg"><path d="M285.696 571.456v214.272h-142.848v-214.272h142.848zm214.272 -285.696v499.968h-142.848v-499.968h142.848zm214.272 142.848v357.12h-142.848v-357.12h142.848zm214.272 -214.272v571.392h-142.848v-571.392h142.848zm71.424 624.96v-678.528q0 -7.254 -5.301 -12.555t-12.555 -5.301h-892.8q-7.254 0 -12.555 5.301t-5.301 12.555v678.528q0 7.254 5.301 12.555t12.555 5.301h892.8q7.254 0 12.555 -5.301t5.301 -12.555zm71.424 -678.528v678.528q0 36.828 -26.226 63.054t-63.054 26.226h-892.8q-36.828 0 -63.054 -26.226t-26.226 -63.054v-678.528q0 -36.828 26.226 -63.054t63.054 -26.226h892.8q36.828 0 63.054 26.226t26.226 63.054z"/></svg>';
     var blob = new Blob([chartIcon], {type: "image/svg+xml;charset=utf-8"});
     var blobUrl = URL.createObjectURL(blob);
@@ -53,7 +53,35 @@ function main() {
         $('<img />').attr('src', blobUrl).attr('width', 14)
     ).appendTo($buttonContainer).click(handleHistogram);
 
-    function handleHistogram() {
+
+    function hourRoundString(date) {
+        return [date.getFullYear(), date.getMonth()+1, date.getDate()].join('/') + ' '+date.getHours()+':00:00';
+    }
+
+    function waitUntilGoogle(func) {
+        function fullBind(func, thisArg, args) {
+            return Function.prototype.bind.apply(func, [thisArg].concat([].slice.call(args)));
+        }
+
+        var bindedFunction;
+        var i = 0;
+        return function waitingFunction() {
+            bindedFunction = bindedFunction || fullBind(func, this,
+                arguments);
+            if (window.google) {
+                bindedFunction();
+            } else {
+                setTimeout(waitingFunction, i += 2);
+            }
+            return false;
+        }
+    }
+
+    function handleHistogram(e) {
+        e.preventDefault();
+        var chartsScript = document.createElement('script');
+        chartsScript.src = 'https://www.google.com/jsapi';
+        document.body.appendChild(chartsScript);
         var keys = Object.keys(urls);
         var completedTasks = 0;
         var error;
@@ -81,6 +109,53 @@ function main() {
         function endTask(err, key) {
             completedTasks++;
             console.log('Completed task ', key, completedTasks, '/', keys.length);
+            if (completedTasks === keys.length) {
+                waitUntilGoogle(displayChart)(toDataTable(window.activities.uniqueActivities));
+            }
+        }
+    }
+
+    function toDataTable(arr) {
+        var buckets = [];
+        var timeBuckets = 7*24;
+        var minBucket = +(maxOld);
+        var maxBucket = +(new Date());
+        for (var i = 0, place, q; i < timeBuckets; i++) {
+            place = minBucket + (maxBucket-minBucket)*i/timeBuckets;
+            q = new Date(place);
+            q.setMinutes(0, 0, 0);
+            buckets.push(q);
+        }
+        var bucketsCont = {};
+        buckets.forEach(function(bucket){
+            bucketsCont[hourRoundString(bucket)] = [];
+        });
+        arr.forEach(function(el) {
+            bucketsCont[hourRoundString(el.time)].push(el);
+        });
+        var res = Object.keys(bucketsCont).map(function(key) {
+            return [key, bucketsCont[key].length];
+        });
+        return [
+            ['Date', 'Activities']
+        ].concat(res);
+    }
+
+    function displayChart(dataTable) {
+        google.load("visualization", "1", {packages:["corechart"], callback: drawChart});
+        function drawChart() {
+            var data = google.visualization.arrayToDataTable(dataTable);
+
+            var options = {
+                title: profile+' Activity',
+                legend: { position: 'bottom' },
+                width: document.body.clientWidth - 100,
+                height: 600
+            };
+
+            var chart = new google.visualization.LineChart(document.body);
+
+            chart.draw(data, options);
 
         }
     }
@@ -91,7 +166,20 @@ function main() {
                     get requests() {
                         return requestDone;
                     },
-        activities: activities
+        activities: activities,
+                    get uniqueActivities() {
+                        var act = this.activities;
+                        var unique = {};
+                        act.forEach(function (act) {
+                            unique[act.type + '-' + act.id] = act;
+                        });
+                        act = Object.keys(unique).map(function (k) {
+                            return unique[k]
+                        }).sort(function (a, b) {
+                            return a.time - b.time;
+                        });
+                        return act;
+                    }
     };
     var apiOptions = {
         dataType: 'json',
