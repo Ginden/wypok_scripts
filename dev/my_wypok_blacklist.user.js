@@ -9,7 +9,8 @@
 // @include     http://www.wykop.pl/ustawienia/
 // @include     http://www.wykop.pl/mikroblog/*
 // @include     http://www.wykop.pl/wpis/*
-// @version     1.7.0
+// @include     http://www.wykop.pl/link/*
+// @version     2.0.1
 // @grant       none
 // @downloadURL https://ginden.github.io/wypok_scripts/dev/my_wypok_blacklist.user.js
 // @license CC BY-SA 3.0
@@ -44,7 +45,7 @@ function main() {
             cache[domClass] = color;
             return color;
         };
-    })()
+    })();
     
 
     var pluginSettings = [
@@ -109,12 +110,12 @@ function main() {
     }
 
     var settings = {};
-            Object.defineProperty(settings, '_slugs', {
-                enumerable: true,
-                configurable: false,
-                writable: false,
-                value: {}
-            });
+    Object.defineProperty(settings, '_slugs', {
+        enumerable: true,
+        configurable: false,
+        writable: false,
+        value: {}
+    });
 
     pluginSettings.forEach(function(el) {
             settings._slugs[el.slug] = el;
@@ -146,7 +147,7 @@ function main() {
         });
     }
 
-    function sortUsersLis(a, b) {
+    function sortUsersList(a, b) {
         if (a.color === b.color) {
             return ((a.nick+'').toLowerCase() > (''+b.nick).toLowerCase() ? 1 : -1);
         } else {
@@ -183,9 +184,10 @@ function main() {
                 var users = [].map.call($('#observedUsers a span', data), function(el){
                     return el.textContent.trim();
                 });
+                var tags = [];
                 callback({
                     users: users || [],
-                    tags:  []
+                    tags:  tags || []
                 });
             }
         });
@@ -195,7 +197,7 @@ function main() {
         callback = callback || Function.prototype;
         if (localStorage['white_list/date/'+ currentDate]) {
             var data = JSON.parse(localStorage['white_list/date/' + currentDate]);
-            setTimeout(callback.bind(null, data),0);
+            setTimeout(callback,0,data);
         }
         else {
             parseWhiteList(function (data) {
@@ -224,7 +226,7 @@ function main() {
             }
             localStorage['black_list/user/' + el.nick + '/color'] = el.color;
             return el;
-        }).sort(sortUsersLis).forEach(function (el) {
+        }).sort(sortUsersList).forEach(function (el) {
             entriesContainer.appendChild(el);
         });
     }
@@ -235,9 +237,8 @@ function main() {
         var entries = $('#itemsStream .entry').filter(function (i, el) {
             var $el = $(el);
             var author = $('div[data-type="entry"] .author .showProfileSummary', $el).text().trim();
-            var tags = [].map.call($('div[data-type="entry"] .text a.showTagSummary', $el), function(el){return el.textContent.trim();});
-            var hasBlackListedTag = blockedUsers.has(author) || blackLists.tags.some(blockedTags.has.bind(blockedTags));
-            return hasBlackListedTag;
+            var tags = [].map.call($('div[data-type="entry"] a.showTagSummary', $el), function(el){return '#'+el.textContent.trim();});
+            return blockedUsers.has(author) || tags.some(blockedTags.has.bind(blockedTags));
         }).toggleClass('ginden_black_list', true);
         setSwitch.call($input[0]);
     }
@@ -261,24 +262,25 @@ function main() {
                        '#black_list_toggle_cont {padding: 10px;}'
     ].join('\n');
 
+    var $blackListToggleCont = $('<li id="black_list_toggle_cont">').append($input, $label)
 
     document.head.appendChild(style);
     if (window.wykop && window.wykop.params) {
         if (wykop.params.action === 'mywykop') {
-            $('.bspace ul').last().append($('<li id="black_list_toggle_cont">').append($input, $label));
+            $('.bspace ul').last().append($blackListToggleCont);
             getBlackList(removeEntries);
         } else if (wykop.params.action === 'tag') {
             getBlackList(removeEntries);
             $('.fix-b-border > ul').last().append(
-                $('<li id="black_list_toggle_cont">').append($input, $label)
+                $blackListToggleCont
             );
         } else if (wykop.params.action === "profile") {
             $('h4.space').last().append(
-                $('<span id="black_list_toggle_cont">').append($input, $label)
+                $blackListToggleCont
             );
             getBlackList(removeEntries);
         } else if (wykop.params.action === 'stream' && wykop.params.method === 'index' && location.pathname.indexOf('/mikroblog/kanal/') === 0) {
-            $('.bspace ul').last().append($('<li id="black_list_toggle_cont">').append($input, $label));
+            $('.bspace ul').last().append($blackListToggleCont);
             getBlackList(removeEntries);
         } else if (settings.BLACK_LIST_SORT && wykop.params.action === "settings" && wykop.params.method === "blacklists") {
             var entriesContainer = document.querySelector('div.space[data-type="users"]');
@@ -320,17 +322,21 @@ function main() {
                         .text(setting.name);
                 } 
                 $p.append($input, $label);
-             //   console.log($p.html(), $input.html(), $label.html())
                 $settingContainer.append($p);
                 $settings.append($settingContainer);
             });
             $('form.settings').prepend($fieldset);
-        } else if (settings.HILIGHT_VOTES && document.querySelector('div[data-type="entry"]')) {
+        } 
+        if(document.querySelector('.r-block.channels h4')) {
+            var p = document.querySelector('.r-block.channels h4').innerHTML
+            p.innerHTML = '<a href="http://www.wykop.pl/mikroblog/kanaly/">'+p.innerHTML+'</a>';
+        }
 
+        if (settings.HILIGHT_PLUS && document.querySelector('div[data-type="entry"]')) {
             function removeVoteGray(subtree) {
                 getWhiteList(function(data){
                     var users = new Set(data.users);
-                    [].forEach.call($(subtree).find('.voters-list a.link.gray'), function(el){
+                    [].forEach.call($(subtree).find('.voters-list a.gray'), function(el){
                         if(users.has(el.textContent.trim())) {
                             var $el = $(el);
                             $el.removeClass('gray');
@@ -349,6 +355,21 @@ function main() {
             removeVoteGray(document.body);
             var mutationObserver = new MutationObserver(removeVoteGray.bind(null, document.body));
             mutationObserver.observe(document.body, {childList: true, subtree: true});
+        }
+        if (settings.HILIGHT_VOTES && wykop.params.action === 'link' && document.querySelector('#votesContainer')) {
+            function hilightDigs(subtree) {
+                getWhiteList(function(data) {
+                    var users = new Set(data.users);
+                    [].forEach.call(subtree.querySelectorAll('.usercard a'), function(el) {
+                        if (users.has(el.getAttribute('title'))) {
+                            $(el.parentNode).addClass('type-light-warning');
+                        }
+                    });
+                });
+            }
+            var mutationObserver = new MutationObserver(hilightDigs.bind(null, document.querySelector('#votesContainer')));
+            mutationObserver.observe(document.querySelector('#votesContainer'), {childList: true, subtree: true});
+            hilightDigs(document.querySelector('#votesContainer'));
         }
     }
     if (window.wykop) {
