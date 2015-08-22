@@ -235,7 +235,7 @@ function main() {
         var entries = $('#itemsStream .entry').filter(function (i, el) {
             var $el = $(el);
             var author = $('div[data-type="entry"] .author .showProfileSummary', $el).text().trim();
-            var text = $('div[data-type="entry"] .text', $el).text();
+            var tags = [].map.call($('div[data-type="entry"] .text a.showTagSummary', $el), function(el){return el.textContent.trim();});
             var hasBlackListedTag = blockedUsers.has(author) || blackLists.tags.some(blockedTags.has.bind(blockedTags));
             return hasBlackListedTag;
         }).toggleClass('ginden_black_list', true);
