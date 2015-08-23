@@ -10,7 +10,7 @@
 // @include     http://www.wykop.pl/mikroblog/*
 // @include     http://www.wykop.pl/wpis/*
 // @include     http://www.wykop.pl/link/*
-// @version     2.2.1
+// @version     2.3.0
 // @grant       none
 // @downloadURL https://ginden.github.io/wypok_scripts/dev/my_wypok_blacklist.user.js
 // @license CC BY-SA 3.0
@@ -99,12 +99,19 @@ function main() {
             slug: 'CANCER_USERS',
             type: 'open_list',
             defaultValue: []   
+        },
+        {
+            name: 'Wyczyść listę ukrytych wpisów',
+            description: 'Czyści listę usuniętych wpisów',
+            slug: 'CLEAR_HIDDEN_ENTRIES',
+            type: 'button',
+            click: clearHiddenEntries
         }
     ];
 
     function createSettingGetter(slug) {
         var lsKey = 'black_list/'+slug;
-        var ret = function(){
+        return function settingGetter(){
             var slugs = this._slugs;
             if (slugs[slug].type === 'boolean') {
                 var matrix = {'true': true, 'false': false, 'undefined': slugs[slug].defaultValue};
@@ -119,13 +126,10 @@ function main() {
             }
             return localStorage[lsKey] === undefined ? slugs[slug].defaultValue : localStorage[lsKey];
         };
-        ret.displayName = 'get setting: '+slug;
-        return ret;
     }
-
     function createSettingSetter(slug) {
         var lsKey = 'black_list/'+slug;
-        var ret = function(val){
+        return function settingSetter(val){
             var slugs = this._slugs;
             if (slugs[slug].type === 'open_list') {
                 if (val === undefined) {
@@ -138,38 +142,16 @@ function main() {
             }
             return val === undefined ? (delete localStorage[lsKey], undefined) : localStorage[lsKey] = val;
         }
-        ret.displayName = 'set setting: '+slug;
-        return ret;
-    }
 
+    }
     function onlyUnique(key) {
-        if (this[key]) return false;
-        this[key] = true;
-        return true;
+        return this[key] ? false : (this[key] = true);
     }
     function naturalSort(a,b) {
         a = (''+a).toLowerCase();
         b = (''+b).toLowerCase();
         return a === b ? 0 : (a > b ? 1 : -1);
     }
-
-    var settings = {};
-    Object.defineProperty(settings, '_slugs', {
-        enumerable: true,
-        configurable: false,
-        writable: false,
-        value: {}
-    });
-
-    pluginSettings.forEach(function(el) {
-            settings._slugs[el.slug] = el;
-            Object.defineProperty(settings, el.slug, {
-                enumerable: true,
-                configurable: false,
-                get: createSettingGetter(el.slug),
-                set: createSettingSetter(el.slug)
-            });
-    });
 
 
     function parseBlackList(callback) {
@@ -252,6 +234,13 @@ function main() {
         }
     }
 
+    function clearHiddenEntries() {
+        var p = JSON.parse(localStorage['black_list/entries'] || '[]').length;
+        localStorage['black_list/entries'] = '[]';
+        alert('Usunięto '+p+' ukrytych wpisów z bazy');
+        return false;
+    }
+
     function sortBlackListEntries(entriesContainer) {
         var childs = slice(entriesContainer.children);
         childs.map(function (el) {
@@ -326,6 +315,23 @@ function main() {
         setSwitch.call($input[0]);
     }
 
+    var settings = {};
+    Object.defineProperty(settings, '_slugs', {
+        enumerable: true,
+        configurable: false,
+        writable: false,
+        value: {}
+    });
+
+    pluginSettings.forEach(function(el) {
+            settings._slugs[el.slug] = el;
+            Object.defineProperty(settings, el.slug, {
+                enumerable: true,
+                configurable: false,
+                get: createSettingGetter(el.slug),
+                set: createSettingSetter(el.slug)
+            });
+    });
 
     var $input = $('<input type="checkbox" id="black_list_toggle" name="black_list_toggle" />');
     var $label = $('<label for="black_list_toggle" />');
@@ -441,6 +447,9 @@ function main() {
                     }
                     listCancerUsers();
                     $extra = [$list];
+                } else if(setting.type === 'button') {
+                    $input = $('<button class="submit">').text(setting.name).attr('title', setting.description).click(setting.click);
+                    $label = $();
                 }
                 $p.append.apply($p, [$input, $label].concat(slice($extra)));
                 $settingContainer.append($p);
