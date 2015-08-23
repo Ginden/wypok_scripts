@@ -5,12 +5,12 @@
 // @include     http://www.wykop.pl/tag/*
 // @include     http://www.wykop.pl/ustawienia/czarne-listy/
 // @include     http://www.wykop.pl/ludzie/*
-// @include     http://www.wykop.pl/mikroblog/kanal/*
+// @include     http://www.wykop.pl/mikroblog/*
 // @include     http://www.wykop.pl/ustawienia/
 // @include     http://www.wykop.pl/mikroblog/*
 // @include     http://www.wykop.pl/wpis/*
 // @include     http://www.wykop.pl/link/*
-// @version     2.0.1
+// @version     2.2.0
 // @grant       none
 // @downloadURL https://ginden.github.io/wypok_scripts/dev/my_wypok_blacklist.user.js
 // @license CC BY-SA 3.0
@@ -31,6 +31,15 @@ function main() {
         0:    50,
         null: 0
     };
+
+    var ENTER_KEY_CODE = 13;
+    var slice = Function.call.bind([].slice);
+    var map = Function.call.bind([].map);
+    var forEach = Function.call.bind([].forEach);
+    var trim = Function.call.bind(''.trim);
+    var getTrimedText = function(el) {
+        return el.jquery ? el.text().trim : el.textContent.trim();
+    }
     var getUserColorFromClass = (function(){
         var cache = Object.create(null);
         return function getUserColorFromClass(domClass){
@@ -83,8 +92,16 @@ function main() {
             slug: 'REPORT_DELETED_ACCOUNTS',
             type: 'boolean',
             defaultValue: true
+        },
+        {
+            name: 'Rakotwórczy użytkownicy:',
+            description: 'Blokuje rozwijanie wpisów autorstwa rakotwórczych użytkowników',
+            slug: 'CANCER_USERS',
+            type: 'open_list',
+            defaultValue: []   
         }
     ];
+
     function createSettingGetter(slug) {
         var lsKey = 'black_list/'+slug;
         var ret = function(){
@@ -92,6 +109,13 @@ function main() {
             if (slugs[slug].type === 'boolean') {
                 var matrix = {'true': true, 'false': false, 'undefined': slugs[slug].defaultValue};
                 return matrix[localStorage[lsKey]];
+            } else if(slugs[slug].type === 'open_list' && localStorage[lsKey]) {
+                try {
+                    return JSON.parse(localStorage[lsKey]);
+                } catch(e) {
+                    console.error({e:e, content: localStorage[lsKey]})
+                    return slugs[slug].defaultValue;
+                }
             }
             return localStorage[lsKey] === undefined ? slugs[slug].defaultValue : localStorage[lsKey];
         };
@@ -103,10 +127,30 @@ function main() {
         var lsKey = 'black_list/'+slug;
         var ret = function(val){
             var slugs = this._slugs;
+            if (slugs[slug].type === 'open_list') {
+                if (val === undefined) {
+                    delete localStorage[lsKey];
+                    return undefined;
+                } else {
+                    localStorage[lsKey] = JSON.stringify(val);
+                    return localStorage[lsKey];
+                }
+            }
             return val === undefined ? (delete localStorage[lsKey], undefined) : localStorage[lsKey] = val;
         }
         ret.displayName = 'set setting: '+slug;
         return ret;
+    }
+
+    function onlyUnique(key) {
+        if (this[key]) return false;
+        this[key] = true;
+        return true;
+    }
+    function naturalSort(a,b) {
+        a = (''+a).toLowerCase();
+        b = (''+b).toLowerCase();
+        return a === b ? 0 : (a > b ? 1 : -1);
     }
 
     var settings = {};
@@ -134,15 +178,12 @@ function main() {
             dataType: 'html',
             success:  function (data) {
                 data = $(data);
-                var users = $('div[data-type="users"] a[title="Przejdź do profilu użytkownika"]', data).text().split('\n').map($.trim).filter(Boolean);
-                var tags = [].map.call($('div[data-type="hashtags"] .tagcard', data), $).map(function (el) {
-                    return el.text().trim()
-                });
+                var users = $('div[data-type="users"] a[title="Przejdź do profilu użytkownika"]', data).text().split('\n').filter(Boolean).map(trim).filter(Boolean).filter(onlyUnique, {});
+                var tags = map($('div[data-type="hashtags"] .tagcard', data), $).map(getTrimedText);
                 callback({
                     users: users || [],
                     tags:  tags || []
                 });
-
             }
         });
     }
@@ -159,15 +200,16 @@ function main() {
         callback = callback || Function.prototype;
         if (localStorage['black_list/date/'+ currentDate]) {
             var data = JSON.parse(localStorage['black_list/date/' + currentDate]);
+            data.entries = localStorage['black_list/entries'] ? JSON.parse(localStorage['black_list/entries']) : [];
             setTimeout(callback.bind(null, data),0);
         }
         else {
             parseBlackList(function (data) {
-                Object.keys(localStorage).filter(function (el) {
-                    return el.indexOf('black_list/date/') === 0 || el.indexOf('black_list_') === 0;
-                }).forEach(function (key) {
-                    delete localStorage[key];
+                Object.keys(localStorage).forEach(function (el) {
+                    if(el.indexOf('black_list/date/') === 0 || el.indexOf('black_list_') === 0)
+                        delete localStorage[key];
                 });
+                data.entries = localStorage['black_list/entries'] ? JSON.parse(localStorage['black_list/entries']) : [];
                 localStorage['black_list/date/' + currentDate] = JSON.stringify(data);
                 callback(data);
             });
@@ -181,13 +223,11 @@ function main() {
             dataType: 'html',
             success:  function (data) {
                 data = $(data);
-                var users = [].map.call($('#observedUsers a span', data), function(el){
-                    return el.textContent.trim();
-                });
+                var users = map($('#observedUsers a span', data), trim);
                 var tags = [];
                 callback({
                     users: users || [],
-                    tags:  tags || []
+                    tags:  tags || [] // TBA
                 });
             }
         });
@@ -213,9 +253,9 @@ function main() {
     }
 
     function sortBlackListEntries(entriesContainer) {
-        var childs = [].slice.call(entriesContainer.children);
+        var childs = slice(entriesContainer.children);
         childs.map(function (el) {
-            el.nick = el.textContent.toLowerCase().trim();
+            el.nick = getTrimedText(el).toLowerCase();
             var aColor = el.querySelector('span[class*=color]') || null;
             var rawColor = (aColor && aColor.getAttribute('class').slice('color-'.length)) | 0;
             el.color = colorSortOrder[rawColor] | 0;
@@ -233,13 +273,56 @@ function main() {
 
     function removeEntries(blackLists) {
         var blockedUsers = new Set(blackLists.users);
-        var blockedTags = new Set(blackLists.tags)
+        var blockedTags = new Set(blackLists.tags);
+        var blockedEntries = new Set(blackLists.entries);
         var entries = $('#itemsStream .entry').filter(function (i, el) {
             var $el = $(el);
             var author = $('div[data-type="entry"] .author .showProfileSummary', $el).text().trim();
-            var tags = [].map.call($('div[data-type="entry"] a.showTagSummary', $el), function(el){return '#'+el.textContent.trim();});
+            var tags = map($('div[data-type="entry"] a.showTagSummary', $el), function(el){return '#'+el.textContent.trim();});
+            var id = Number($el.attr('data-id'));
             return blockedUsers.has(author) || tags.some(blockedTags.has.bind(blockedTags));
         }).toggleClass('ginden_black_list', true);
+        forEach(document.querySelectorAll('#itemsStream .entry div[data-type="entry"]'), function(el){
+            var id = Number(el.getAttribute('data-id'));
+            var $menu = $(el).find('ul.responsive-menu');
+            var $li = $('<li />')
+            var $a  = $('<a />')
+                .addClass('affect hide black-list-entry-hide-switch')
+                .attr('data-id', id)
+                .attr('href', '#')
+                .text(blockedEntries.has(id) ? 'pokazuj' : 'ukryj');
+            if (blockedEntries.has(id)) {
+                $(el).parent('li.entry').toggleClass('ginden_black_list', true);
+            }
+            $li.append($a);
+            $menu.append($li);
+        });
+        $( "#itemsStream" ).on( "click", "a.black-list-entry-hide-switch", function(e) {
+            var $this = $(this);
+            var id = Number($this.attr('data-id'));
+            var hidden = $(this).text() !== 'ukryj';
+
+            if (localStorage['black_list/entries']) {
+                var list = JSON.parse(localStorage['black_list/entries']).filter(onlyUnique, {});
+                if (hidden) {
+                    list = list.filter(function(el) {return el !== id});
+                    $this.text('ukryj');
+                } else {
+                    list.push(id);
+                    $this.text('pokazuj');
+                }
+                localStorage['black_list/entries'] =  JSON.stringify(list);
+                
+            } else {
+                localStorage['black_list/entries'] = JSON.stringify([id]);
+                $this.text('pokazuj');
+            }
+            $this.parents('div[data-type="entry"]').parent().toggleClass('ginden_black_list', !hidden);
+            e.stopPropagation();
+            e.preventDefault();
+            return false;
+        });
+
         setSwitch.call($input[0]);
     }
 
@@ -279,7 +362,7 @@ function main() {
                 $blackListToggleCont
             );
             getBlackList(removeEntries);
-        } else if (wykop.params.action === 'stream' && wykop.params.method === 'index' && location.pathname.indexOf('/mikroblog/kanal/') === 0) {
+        } else if (wykop.params.action === 'stream' && (wykop.params.method === 'index' || wykop.params.method === 'hot')) {
             $('.bspace ul').last().append($blackListToggleCont);
             getBlackList(removeEntries);
         } else if (settings.BLACK_LIST_SORT && wykop.params.action === "settings" && wykop.params.method === "blacklists") {
@@ -304,6 +387,7 @@ function main() {
                 var id = 'my_wykop_black_list_'+setting.slug;
                 var $input = $('<span />').text('invalid setting:'+ JSON.stringify(setting,null,1));
                 var $label = $('<span />').text('invalid setting:'+ JSON.stringify(setting,null,1));
+                var $extra = [];
                 if (setting.type === 'boolean') {
                     $input = $('<input />');
                     $input
@@ -320,8 +404,45 @@ function main() {
                         .attr('for', id)
                         .attr('title', setting.description || '')
                         .text(setting.name);
-                } 
-                $p.append($input, $label);
+                } else if (setting.type === 'open_list') {
+                    $input = $('<input id="cancer_user_input" type="text" />');
+                    $label = $('<label />').text(setting.description);
+                    $label.attr('for', 'cancer_user_input');
+                    $input.on('keypress keydown keyup', function (e) {
+                        if (e.keyCode == ENTER_KEY_CODE) {
+                            e.stopPropagation();
+                            e.preventDefault();
+                            settings[setting.slug] = (settings[setting.slug] || []).concat(this.value.trim()).filter(onlyUnique,{}).filter(Boolean);
+                            this.value='';
+                            setTimeout(listCancerUsers,10);
+
+                            return false;
+                        }
+                    });
+                    var $list = $('<ul />');
+                    function removeUserFromCancerList(e) {
+                        var nick = $(this).parent('li').children('a').text().trim();
+                        settings[setting.slug] = (settings[setting.slug] || []).filter(onlyUnique,{})
+                        .filter(Boolean).filter(function(el) {return el !== nick;});
+                        console.log('Removed user '+nick)
+                        setTimeout(listCancerUsers,10);
+                    }
+                    function listCancerUsers() {
+                        $list.html('');
+                        settings[setting.slug].filter(Boolean).forEach(function(cancerUser){
+                            var $row = $('<li />').append(
+                                    $('<span />').append(
+                                        $('<i class="fa fa-times" />')
+                                    ).click(removeUserFromCancerList),
+                                $('<a />').text(cancerUser).attr('href', 'http://wykop.pl/ludzie/'+cancerUser+'/')
+                            );
+                            $list.append($row);
+                        });
+                    }
+                    listCancerUsers();
+                    $extra = [$list];
+                }
+                $p.append.apply($p, [$input, $label].concat(slice($extra)));
                 $settingContainer.append($p);
                 $settings.append($settingContainer);
             });
@@ -336,8 +457,8 @@ function main() {
             function removeVoteGray(subtree) {
                 getWhiteList(function(data){
                     var users = new Set(data.users);
-                    [].forEach.call($(subtree).find('.voters-list a.gray'), function(el){
-                        if(users.has(el.textContent.trim())) {
+                    forEach($(subtree).find('.voters-list a.gray'), function(el){
+                        if(users.has(getTrimedText(el))) {
                             var $el = $(el);
                             $el.removeClass('gray');
                             $el.addClass('observed_user');
@@ -346,21 +467,20 @@ function main() {
                                     this.attr('style', 'color: '+getUserColorFromClass(domClass)+' !important');
                                     return true;
                                 }
-
                             }, $el)
                         }
                     });
                 });
             }
-            removeVoteGray(document.body);
-            var mutationObserver = new MutationObserver(removeVoteGray.bind(null, document.body));
+            var boundRemoveVoteGray = removeVoteGray.bind(null, document.querySelector('#itemsStream'));
+            var mutationObserver = new MutationObserver(boundRemoveVoteGray);
             mutationObserver.observe(document.body, {childList: true, subtree: true});
         }
         if (settings.HILIGHT_VOTES && wykop.params.action === 'link' && document.querySelector('#votesContainer')) {
             function hilightDigs(subtree) {
                 getWhiteList(function(data) {
                     var users = new Set(data.users);
-                    [].forEach.call(subtree.querySelectorAll('.usercard a'), function(el) {
+                    forEach(subtree.querySelectorAll('.usercard a'), function(el) {
                         if (users.has(el.getAttribute('title'))) {
                             $(el.parentNode).addClass('type-light-warning');
                         }
