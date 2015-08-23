@@ -10,7 +10,7 @@
 // @include     http://www.wykop.pl/mikroblog/*
 // @include     http://www.wykop.pl/wpis/*
 // @include     http://www.wykop.pl/link/*
-// @version     2.2.0
+// @version     2.2.1
 // @grant       none
 // @downloadURL https://ginden.github.io/wypok_scripts/dev/my_wypok_blacklist.user.js
 // @license CC BY-SA 3.0
@@ -207,7 +207,7 @@ function main() {
             parseBlackList(function (data) {
                 Object.keys(localStorage).forEach(function (el) {
                     if(el.indexOf('black_list/date/') === 0 || el.indexOf('black_list_') === 0)
-                        delete localStorage[key];
+                        delete localStorage[el];
                 });
                 data.entries = localStorage['black_list/entries'] ? JSON.parse(localStorage['black_list/entries']) : [];
                 localStorage['black_list/date/' + currentDate] = JSON.stringify(data);
