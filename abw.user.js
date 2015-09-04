@@ -29,7 +29,7 @@ fix_fucked_JSON.innerHTML = '(' + (function (global) {
     })
         .toString() + ')(window)';
 // MACIEJ
-// ZABIJ SIÊ
+// ZABIJ SIÄ˜
 document.body.appendChild(fix_fucked_JSON);
 
 function main() {
@@ -71,7 +71,7 @@ function main() {
         var tags = obj.tags;
         var rawTags = obj.rawTags;
         var muslims = [/islam/gi, new RegExp('muzu\u0142ma', 'gi')];
-        //'\\u0'+'ê'.charCodeAt(0).toString(16)
+        //'\\u0'+'Ä™'.charCodeAt(0).toString(16)
         var politics = [/Tusk/g, new RegExp('Dud[\u0119a]'), new RegExp('Szyd\u0142o', 'g')];
         if (!rawTags.match('#islam') && (anyMatch(title, muslims) || anyMatch(description, muslims))) {
             return true;
@@ -253,7 +253,7 @@ function main() {
         FIRST_SUCCESS:        'Request wys\u0142any poprawnie.',
         SPAM_LIST_HEADER:     [
                                   '[Spamlista](http://ginden.pl/scripts/abw.html)',
-                                  '([wypisz/zapisz siê](http://www.wykop.pl/dodatki/pokaz/267/))',
+                                  '([wypisz/zapisz siÄ™](http://www.wykop.pl/dodatki/pokaz/267/))',
                                   '[dodatek Gindena ###](http://ginden.pl/scripts/abw.html#przycisk)'
                               ].join(' '),
         TOTAL_SUCCES:         'Wszystko wys\u0142ane poprawnie!',
@@ -435,9 +435,9 @@ function main() {
                 var ret = $('<form />');
                 var inputs = [
                     ['Ikona ABW', 'ICON'],
-                    ['Przyciski zg³aszania', 'BUTTONS'],
+                    ['Przyciski zgÅ‚aszania', 'BUTTONS'],
                     ['Link na belce', 'NAV'],
-                    ['Heuretystyczne podœwietlanie naruszeñ', 'SUGGEST']
+                    ['Heuretystyczne podÅ›wietlanie naruszeÅ„', 'SUGGEST']
                 ];
                 var row;
                 var table = $('<table />');
@@ -519,7 +519,7 @@ function main() {
                     $('<a>')
                         .attr({
                             'class': 'tip fleft cfff tab fbold',
-                            'title': 'Agencja Bezpieczeñstwa Wykopu',
+                            'title': 'Agencja BezpieczeÅ„stwa Wykopu',
                             'href':  GROUP.getURL()
                         })
                         .text('ABW')
