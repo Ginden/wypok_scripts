@@ -3,7 +3,7 @@
 // @namespace abw_przycisk
 // @description Przycisk do ABW
 // @include http://*.wykop.pl/*
-// @version 4.0.0
+// @version 4.2.1
 // @grant GM_info
 // @downloadURL https://ginden.github.io/wypok_scripts/abw.user.js
 // @license CC BY-SA 3.0
@@ -58,13 +58,26 @@ function main() {
         return Function.prototype.bind.apply(func, [thisArg].concat(args));
     }
 
+    function anyMatch(string, array) {
+        return array.some(function (regex) {
+            return regex.test(string);
+        });
+    }
+
     function matchHeuretics(obj) {
         "use strict";
         var description = obj.description;
         var title = obj.title;
         var tags = obj.tags;
         var rawTags = obj.rawTags;
-
+        var muslims = [/islam/gi, new RegExp('muzu\u0142ma', 'gi')];
+        //'\\u0'+'ê'.charCodeAt(0).toString(16)
+        var politics = [/Tusk/g, new RegExp('Dud[\u0119a]'), new RegExp('Szyd\u0142o', 'g')];
+        if (!rawTags.match('#islam') && (anyMatch(title, muslims) || anyMatch(description, muslims))) {
+            return true;
+        } else if (!rawTags.match('#polityka') && (anyMatch(title, politics) || anyMatch(description, politics))) {
+            return true;
+        }
     }
 
 
@@ -334,45 +347,33 @@ function main() {
             modal:     true,
             buttons:   {
                 'zg\u0142o\u015B':               function () {
-                    var reportText = $('textarea', this)
-                        .val();
-                    addGroupEntry(reportText, GROUP.ID,
-                        true);
-                    $(this)
-                        .dialog("close");
-                    reportDialog.empty()
-                        .remove();
+                    var reportText = $('textarea', this).val();
+                    addGroupEntry(reportText, GROUP.ID, true);
+                    $(this).dialog("close");
+                    reportDialog.empty().remove();
                 },
                 'zg\u0142o\u015B bez spamlisty': function () {
                     var reportText = $('textarea', this)
                         .val();
                     addGroupEntry(reportText, GROUP.ID,
                         false);
-                    $(this)
-                        .dialog("close");
-                    reportDialog.empty()
-                        .remove();
+                    $(this).dialog("close");
+                    reportDialog.empty().remove();
                 },
 
                 "publicznie": function () {
-                    var reportText = $('textarea', this)
-                        .val();
+                    var reportText = $('textarea', this).val();
                     addGroupEntry(reportText, false, false);
-                    $(this)
-                        .dialog("close");
-                    reportDialog.empty()
-                        .remove();
+                    $(this).dialog("close");
+                    reportDialog.empty().remove();
                 },
                 "Anuluj":     function () {
-                    $(this)
-                        .dialog("close");
-                    reportDialog.empty()
-                        .remove();
+                    $(this).dialog("close");
+                    reportDialog.empty().remove();
                 }
             },
             close:     function (event, ui) {
-                reportDialog.empty()
-                    .remove();
+                reportDialog.empty().remove();
             }
         });
         return false;
@@ -548,14 +549,27 @@ function main() {
                     $('.user-profile .m-reset-position .button').parent().append(reportButton);
                 }
             }
-            if (CONFIGURATION.SUGGEST) {
+            if (false && CONFIGURATION.SUGGEST) {
                 if (Wykop.currentAction === 'index' || Wykop.currentAction === 'upcoming') {
-
+                    [].forEach.call($('#itemsStream li'), function (el) {
+                        "use strict";
+                        var ret = {};
+                        var $el = $(el);
+                        ret.tags = [].map.call($('.fix-tagline a.tag', el), function (el) {
+                            return $(el).text()
+                        });
+                        ret.rawTags = ret.tags.join(' ');
+                        ret.description = $('.description', el).text().trim();
+                        ret.title = $('h2', el).text().trim();
+                        if (matchHeuretics(ret)) {
+                            $el.addClass('type-light-warning');
+                        }
+                    });
                 }
             }
         })();
     } catch (e) {
-        alert(e);
+        alert(e.toString()+e.stack);
     }
 }
 
