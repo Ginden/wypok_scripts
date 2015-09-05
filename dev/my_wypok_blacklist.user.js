@@ -10,10 +10,10 @@
 // @include     http://www.wykop.pl/mikroblog/*
 // @include     http://www.wykop.pl/wpis/*
 // @include     http://www.wykop.pl/link/*
-// @version     2.3.0
+// @version     2.5.0
 // @grant       none
 // @downloadURL https://ginden.github.io/wypok_scripts/dev/my_wypok_blacklist.user.js
-// @license CC BY-SA 3.0
+// @license CC  MIT
 // ==/UserScript==
 
 
@@ -38,7 +38,7 @@ function main() {
     var forEach = Function.call.bind([].forEach);
     var trim = Function.call.bind(''.trim);
     var getTrimedText = function(el) {
-        return el.jquery ? el.text().trim : el.textContent.trim();
+        return el.jquery ? el.text().trim() : el.textContent.trim();
     }
     var getUserColorFromClass = (function(){
         var cache = Object.create(null);
@@ -106,6 +106,13 @@ function main() {
             slug: 'CLEAR_HIDDEN_ENTRIES',
             type: 'button',
             click: clearHiddenEntries
+        },
+        {
+            name: 'Podświetlaj komentarze obserwowanych',
+            description: 'Podświetlanie komentarzy obserwowanych',
+            slug: 'HILIGHT_COMMENTS',
+            type: 'boolean',
+            defaultValue: 'false'
         }
     ];
 
@@ -161,7 +168,7 @@ function main() {
             success:  function (data) {
                 data = $(data);
                 var users = $('div[data-type="users"] a[title="Przejdź do profilu użytkownika"]', data).text().split('\n').filter(Boolean).map(trim).filter(Boolean).filter(onlyUnique, {});
-                var tags = map($('div[data-type="hashtags"] .tagcard', data), $).map(getTrimedText);
+                var tags = map($('div[data-type="hashtags"] .tagcard', data), getTrimedText);
                 callback({
                     users: users || [],
                     tags:  tags || []
@@ -205,7 +212,7 @@ function main() {
             dataType: 'html',
             success:  function (data) {
                 data = $(data);
-                var users = map($('#observedUsers a span', data), trim);
+                var users = map($('#observedUsers a span', data), getTrimedText).filter(Boolean).filter(onlyUnique, {});
                 var tags = [];
                 callback({
                     users: users || [],
@@ -269,6 +276,7 @@ function main() {
             var author = $('div[data-type="entry"] .author .showProfileSummary', $el).text().trim();
             var tags = map($('div[data-type="entry"] a.showTagSummary', $el), function(el){return '#'+el.textContent.trim();});
             var id = Number($el.attr('data-id'));
+         //   console.log(tags.some(blockedTags.has.bind(blockedTags)), tags, blockedTags);
             return blockedUsers.has(author) || tags.some(blockedTags.has.bind(blockedTags));
         }).toggleClass('ginden_black_list', true);
         forEach(document.querySelectorAll('#itemsStream .entry div[data-type="entry"]'), function(el){
@@ -500,6 +508,23 @@ function main() {
             mutationObserver.observe(document.querySelector('#votesContainer'), {childList: true, subtree: true});
             hilightDigs(document.querySelector('#votesContainer'));
         }
+        if (settings.HILIGHT_COMMENTS && wykop.params.action === 'link') {
+            function hilightComments(data) {
+                var users = new Set(data.users);
+                var comments = document.querySelectorAll('div[data-type=comment]');
+                (function q(i) {
+                    var el = comments[i];
+                    if (!el) return;
+                    var $el = $(el);
+                    var author = getTrimedText($el.find('a.showProfileSummary b'));
+                    if (users.has(author)) {
+                        $el.addClass('type-light-warning');
+                    }
+                    (i % 10 === 0) ? setTimeout(q,0,i+1) : q();
+                })(0);
+            }
+            getWhiteList(hilightComments);
+        }
     }
     if (window.wykop) {
         window.wykop.plugins = window.wykop.plugins || {};
@@ -520,6 +545,15 @@ function main() {
                     delete localStorage[key];
                 });
                 console.log('Removed '+entries.length+' black list cache entries');
+            },
+            flushWhiteListCache: function(){
+                var entries = Object.keys(localStorage).filter(function (el) {
+                    return el.indexOf('white_list/date/') === 0;
+                });
+                entries.forEach(function (key) {
+                    delete localStorage[key];
+                });
+                console.log('Removed '+entries.length+' white list cache entries');
             },
             settings: settings,
             _lines: ['//empty line'].concat(main.toString().split('\n'))
