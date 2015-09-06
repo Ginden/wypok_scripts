@@ -10,7 +10,7 @@
 // @include     http://www.wykop.pl/mikroblog/*
 // @include     http://www.wykop.pl/wpis/*
 // @include     http://www.wykop.pl/link/*
-// @version     2.5.0
+// @version     2.5.2
 // @grant       none
 // @downloadURL https://ginden.github.io/wypok_scripts/dev/my_wypok_blacklist.user.js
 // @license CC  MIT
@@ -112,7 +112,7 @@ function main() {
             description: 'Podświetlanie komentarzy obserwowanych',
             slug: 'HILIGHT_COMMENTS',
             type: 'boolean',
-            defaultValue: 'false'
+            defaultValue: false
         }
     ];
 
@@ -520,7 +520,7 @@ function main() {
                     if (users.has(author)) {
                         $el.addClass('type-light-warning');
                     }
-                    (i % 10 === 0) ? setTimeout(q,0,i+1) : q();
+                    (i % 10 === 0) ? setTimeout(q,0,i+1) : q(i+1);
                 })(0);
             }
             getWhiteList(hilightComments);
