@@ -10,7 +10,7 @@
 // @include     http://www.wykop.pl/mikroblog/*
 // @include     http://www.wykop.pl/wpis/*
 // @include     http://www.wykop.pl/link/*
-// @version     3.0.0
+// @version     3.2.0
 // @grant       none
 // @downloadURL https://ginden.github.io/wypok_scripts/dev/my_wypok_blacklist.user.js
 // @license CC  MIT
@@ -20,12 +20,16 @@
 function main() {
     "use strict";
     var $ = window.jQuery || window.$;
-    function getPerDayUniqueString() {
-        return (new Date()).toDateString();
+    function isSuperUser() {
+        return +localStorage.debug || location.hash === '#debug' || sessionStorage.debug;
+    }
+    function getTimeBasedUniqueString() {
+        var base = (new Date()).toLocaleDateString();
+        var everyHours = +(/\d*/.exec(settings.CACHE_REFRESH_TIME));
+        return base + '-'+everyHours+'-'+Math.floor((new Date).getHours()/everyHours);
     }
 
-    function noop() {
-    }
+    function noop() {}
 
     var colorSortOrder = {
         1002: 100, //konto usunięte
@@ -82,6 +86,30 @@ function main() {
             defaultValue: false
         },
         {
+            name:        'Częstość odświeżania cache',
+            description: 'Zmienia częstość odświeżania cache. Po zmienie dotychczasowe cache jest inwalidowane.',
+            slug:        'CACHE_REFRESH_TIME',
+            type:        'select',
+            defaultValue: '24h',
+            values:       ['24h', '12h', '6h', '4h', '2h', '1h']
+        },
+        {
+            name: 'Obejrzyj ustawienia',
+            slug: 'DEBUG_SHOW_SETTINGS',
+            type: 'button',
+            debug: true,
+            click: function(e){
+                var json = {};
+                pluginSettings.forEach(function(setting) {
+                    json[setting.slug] = settings[setting.slug] || null;
+                });
+                alert(JSON.stringify(json, null, 2));
+                e.stopPropagation();
+                e.preventDefault();
+                return false;
+            }
+        },
+        {
             name:        'Wyczyść listę ukrytych wpisów',
             description: 'Czyści listę usuniętych wpisów',
             slug:        'CLEAR_HIDDEN_ENTRIES',
@@ -118,26 +146,27 @@ function main() {
     var map = Function.prototype.call.bind([].map);
     var forEach = Function.prototype.call.bind([].forEach);
     var trim = Function.prototype.call.bind(''.trim);
-    var getTrimedText = function (el) {
+    var getTrimmedText = function (el) {
         return el.jquery ? el.text().trim() : el.textContent.trim();
     };
     var getUserColorFromClass = (function () {
         var cache = Object.create(null);
         return function getUserColorFromClass(domClass) {
+            var el, color;
             if (cache[domClass]) {
                 return cache[domClass];
             }
-            var el = document.createElement('a');
+            el = document.createElement('a');
             el.setAttribute('class', domClass);
             document.body.appendChild(el);
-            var color = getComputedStyle(el).getPropertyValue('color');
+            color = getComputedStyle(el).getPropertyValue('color');
             document.body.removeChild(el);
             cache[domClass] = color;
             return color;
         };
     })();
 
-    function hilightDigs(subtree) {
+    function highlightDigs(subtree) {
         getWhiteList(function (data) {
             var users = new Set(data.users);
             forEach(subtree.querySelectorAll('.usercard a'), function (el) {
@@ -148,16 +177,16 @@ function main() {
         });
     }
 
-    function hilightComments(data) {
+    function highlightComments(data) {
         var users = new Set(data.users);
         var comments = document.querySelectorAll('div[data-type=comment]');
         (function next(i) {
-            var el = comments[i];
+            var el = comments[i], $el, author;
             if (!el) {
                 return;
             }
-            var $el = $(el);
-            var author = getTrimedText($el.find('a.showProfileSummary b'));
+            $el = $(el);
+            author = getTrimmedText($el.find('a.showProfileSummary b'));
             if (users.has(author)) {
                 $el.addClass('type-light-warning');
             }
@@ -173,6 +202,7 @@ function main() {
             });
         console.log('Removed user ' + nick);
         setTimeout(listCancerUsers, 4);
+        e.preventDefault();
         return false;
     }
 
@@ -267,9 +297,9 @@ function main() {
             dataType: 'html',
             success:  function (data) {
                 data = $(data);
-                var users = map($('div[data-type="users"] div.usercard a span', data), getTrimedText).map(trim).filter(Boolean).filter(onlyUnique, {});
-                var tags = map($('div[data-type="hashtags"] .tagcard', data), getTrimedText);
-                var domains = map($('div[data-type="domains"] span.tag', data), getTrimedText);
+                var users = map($('div[data-type="users"] div.usercard a span', data), getTrimmedText).map(trim).filter(Boolean).filter(onlyUnique, {});
+                var tags = map($('div[data-type="hashtags"] .tagcard', data), getTrimmedText);
+                var domains = map($('div[data-type="domains"] span.tag', data), getTrimmedText);
                 callback({
                     users:   users || [],
                     tags:    tags || [],
@@ -281,7 +311,7 @@ function main() {
 
     function sortUsersList(a, b) {
         if (a.color === b.color) {
-            return ((a.nick + '').toLowerCase() > ('' + b.nick).toLowerCase() ? 1 : -1);
+            return naturalSort(a.nick, b.nick);
         } else {
             return a.color < b.color ? 1 : -1;
         }
@@ -289,8 +319,8 @@ function main() {
 
     function getBlackList(callback) {
         callback = callback || Function.prototype;
-        if (localStorage['black_list/date/' + getPerDayUniqueString()]) {
-            var data = JSON.parse(localStorage['black_list/date/' + getPerDayUniqueString()]);
+        if (localStorage['black_list/date/' + getTimeBasedUniqueString()]) {
+            var data = JSON.parse(localStorage['black_list/date/' + getTimeBasedUniqueString()]);
             data.entries = localStorage['black_list/entries'] ? JSON.parse(localStorage['black_list/entries']) : [];
             setTimeout(callback.bind(null, data), 0);
         }
@@ -302,7 +332,7 @@ function main() {
                     }
                 });
                 data.entries = localStorage['black_list/entries'] ? JSON.parse(localStorage['black_list/entries']) : [];
-                localStorage['black_list/date/' + getPerDayUniqueString()] = JSON.stringify(data);
+                localStorage['black_list/date/' + getTimeBasedUniqueString()] = JSON.stringify(data);
                 callback(data);
             });
         }
@@ -312,7 +342,7 @@ function main() {
         getWhiteList(function (data) {
             var users = new Set(data.users);
             forEach($(subtree).find('.voters-list a.gray'), function (el) {
-                if (users.has(getTrimedText(el))) {
+                if (users.has(getTrimmedText(el))) {
                     var $el = $(el);
                     $el.removeClass('gray');
                     $el.addClass('observed_user');
@@ -333,7 +363,7 @@ function main() {
             dataType: 'html',
             success:  function (data) {
                 data = $(data);
-                var users = map($('#observedUsers a span', data), getTrimedText).filter(Boolean).filter(onlyUnique, {});
+                var users = map($('#observedUsers a span', data), getTrimmedText).filter(Boolean).filter(onlyUnique, {});
                 var tags = [];
                 callback({
                     users: users || [],
@@ -345,14 +375,14 @@ function main() {
 
     function getWhiteList(callback) {
         callback = callback || Function.prototype;
-        if (localStorage['white_list/date/' + getPerDayUniqueString()]) {
-            var data = JSON.parse(localStorage['white_list/date/' + getPerDayUniqueString()]);
+        if (localStorage['white_list/date/' + getTimeBasedUniqueString()]) {
+            var data = JSON.parse(localStorage['white_list/date/' + getTimeBasedUniqueString()]);
             setTimeout(callback, 0, data);
         }
         else {
             parseWhiteList(function (data) {
                 flushWhiteListCache(noop);
-                localStorage['white_list/date/' + getPerDayUniqueString()] = JSON.stringify(data);
+                localStorage['white_list/date/' + getTimeBasedUniqueString()] = JSON.stringify(data);
                 callback(data);
             });
         }
@@ -368,7 +398,7 @@ function main() {
     function sortBlackListEntries(entriesContainer) {
         var childs = slice(entriesContainer.children);
         childs.map(function (el) {
-            el.nick = getTrimedText(el).toLowerCase();
+            el.nick = getTrimmedText(el).toLowerCase();
             var aColor = el.querySelector('span[class*=color]') || null;
             var rawColor = (aColor && aColor.getAttribute('class').slice('color-'.length)) | 0;
             el.color = colorSortOrder[rawColor] | 0;
@@ -467,7 +497,7 @@ function main() {
 
     var settings = {};
     Object.defineProperty(settings, '_slugs', {
-        enumerable:   true,
+        enumerable:   false,
         configurable: false,
         writable:     false,
         value:        {}
@@ -513,6 +543,7 @@ function main() {
             setSwitch:           function (state) {
                 $input.prop('checked', !!state);
             },
+            dateTimeString:      getTimeBasedUniqueString(),
             parseBlackList:      parseBlackList,
             getBlackList:        getBlackList,
             removeEntries:       removeEntries,
@@ -559,6 +590,9 @@ function main() {
             var $header = $('<h4 />').text('Czarnolistuj Mój Wypok');
             $fieldset.append($header, $settings);
             pluginSettings.forEach(function (setting) {
+                if (setting.debug && !isSuperUser()) {
+                    return;
+                }
                 var $settingContainer = $('<div class="row" />');
                 var $p = $('<p/>');
                 var id = 'my_wykop_black_list_' + setting.slug;
@@ -602,6 +636,29 @@ function main() {
                 } else if (setting.type === 'button') {
                     $input = $('<button class="submit">').text(setting.name).attr('title', setting.description).click(setting.click);
                     $label = $();
+                } else if (setting.type === 'select') {
+                    $input = $('<select class="margin5_0" />');
+                    $input
+                        .attr('id', id);
+                    $input.append.apply($input, setting.values.map(function(val){
+                        var ret = $('<option />').text(val).val(val);
+                        if (val === settings[setting.slug]) {
+                            ret.attr('selected', 'selected');
+                        }
+                        return ret;
+                    }));
+                    $input.on('change', function(){
+                        settings[setting.slug] = $(this).val();
+                    });
+                    $label = $('<label />');
+                    $label
+                        .addClass('inline')
+                        .attr('for', id)
+                        .attr('title', setting.description || '')
+                        .text(setting.name);
+                    $settingContainer.append.apply($settingContainer, [$label, $input].concat(slice($extra)));
+                    $settings.append($settingContainer);
+                    return;
                 }
                 $p.append.apply($p, [$input, $label].concat(slice($extra)));
                 $settingContainer.append($p);
@@ -621,19 +678,19 @@ function main() {
             removeVoteGray(document.body);
         }
         if (settings.HILIGHT_VOTES && wykop.params.action === 'link' && document.querySelector('#votesContainer')) {
-            var mutationObserver = new MutationObserver(hilightDigs.bind(null, document.querySelector('#votesContainer')));
+            var mutationObserver = new MutationObserver(highlightDigs.bind(null, document.querySelector('#votesContainer')));
             mutationObserver.observe(document.querySelector('#votesContainer'), {childList: true, subtree: true});
-            hilightDigs(document.querySelector('#votesContainer'));
+            highlightDigs(document.querySelector('#votesContainer'));
         }
         if (settings.HILIGHT_COMMENTS && wykop.params.action === 'link') {
-            getWhiteList(hilightComments);
+            getWhiteList(highlightComments);
         }
         if (settings.CANCER_USERS.length > 0) {
             document.addEventListener('click', function(e) {
                 var target = e.originalTarget;
                 if (target.tagName === 'A' && target.getAttribute('class') === 'unhide') {
                     var $el = $(target);
-                    var author = getTrimedText($el.parents('[data-type]').find('.author.ellipsis a b'));
+                    var author = getTrimmedText($el.parents('[data-type]').find('.author.ellipsis a b'));
                     if (settings.CANCER_USERS.indexOf(author) !== -1) {
                         alert('Rozwijanie komentarzy użytkownika '+author +' jest zablokowane; Zajrzyj do ustawień by na to pozwolić.');
                         e.stopPropagation();
