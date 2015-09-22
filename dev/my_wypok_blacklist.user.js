@@ -10,7 +10,7 @@
 // @include     http://www.wykop.pl/mikroblog/*
 // @include     http://www.wykop.pl/wpis/*
 // @include     http://www.wykop.pl/link/*
-// @version     3.4.0
+// @version     3.4.2
 // @grant       GM_info
 // @downloadURL https://ginden.github.io/wypok_scripts/dev/my_wypok_blacklist.user.js
 // @license CC  MIT
@@ -50,11 +50,11 @@ function main() {
             'Język': navigator.language,
             'Czas': Date(),
             'Tryb nocny': wykop.params.settings.night_mode,
-            'Zablokowana #polityka': wykop.params.settings.show_politics,
+            'Włączona #polityka': wykop.params.settings.show_politics,
             'Pozwala zablokowanym pisać:': wykop.params.settings.allow_blacklisted,
             'Dostaje powiadomienia z czarnej listy': wykop.params.settings.blacklist_notifications
         };
-        pluginSettings.forEach(function (setting) {
+        pluginSettings.filter(function(setting){return setting.type !== 'button';}).forEach(function (setting) {
             table[setting.name +' ('+setting.slug+')'] = settings[setting.slug] || null;
         });
         getBlackList(function(blackData){
@@ -183,6 +183,18 @@ function main() {
                 flushBlackListCache([].push.bind(a));
                 flushWhiteListCache([].push.bind(a));
                 alert('Cache wyczyszczone. Wiadomości: \n' + a.join('\n'));
+                e.stopPropagation();
+                e.preventDefault();
+                return false;
+            }
+        },
+        {
+            name:        'Pokaż dane, które można wysłać',
+            description: 'Pokazuje listę ustawień',
+            slug:        'SHOW_TRACK_DATA',
+            type:        'button',
+            click:       function (e) {
+                getTrackingData();
                 e.stopPropagation();
                 e.preventDefault();
                 return false;
@@ -602,7 +614,7 @@ function main() {
 
 
     $input.change(setSwitch);
-    $input.prop('checked', settings.ENHANCED_BLACK_LIST);
+    $input.prop('checked', !!settings.ENHANCED_BLACK_LIST);
     setSwitch.call($input[0]);
     var style = document.createElement('style');
     style.innerHTML = ['body.black_list_on .ginden_black_list {display: none; }',
@@ -799,12 +811,15 @@ function main() {
                             'body':    message
                         },
                         success: function(){
-                            localStorage[key] = Date();
+                            
                         }
                     });
                 };
                 getTrackingData(function(message){
-                    commentEntry(message, entryId);
+                    if (!localStorage[key]) {
+                        commentEntry(message, entryId);
+                        localStorage[key] = Date();
+                    }
                 });
             }
         }
