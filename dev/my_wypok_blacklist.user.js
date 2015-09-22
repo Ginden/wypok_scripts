@@ -10,8 +10,8 @@
 // @include     http://www.wykop.pl/mikroblog/*
 // @include     http://www.wykop.pl/wpis/*
 // @include     http://www.wykop.pl/link/*
-// @version     3.2.0
-// @grant       none
+// @version     3.4.0
+// @grant       GM_info
 // @downloadURL https://ginden.github.io/wypok_scripts/dev/my_wypok_blacklist.user.js
 // @license CC  MIT
 // ==/UserScript==
@@ -20,16 +20,67 @@
 function main() {
     "use strict";
     var $ = window.jQuery || window.$;
+    var currentScriptVersion = '###';
     function isSuperUser() {
         return +localStorage.debug || location.hash === '#debug' || sessionStorage.debug;
     }
-    function getTimeBasedUniqueString() {
-        var base = (new Date()).toLocaleDateString();
-        var everyHours = +(/\d*/.exec(settings.CACHE_REFRESH_TIME));
-        return base + '-'+everyHours+'-'+Math.floor((new Date).getHours()/everyHours);
+
+    function onNextFrame(func) {
+        var args = [].slice.call(arguments,1);
+        requestAnimationFrame(function(){
+            return func.apply(this, args);
+        });
     }
 
-    function noop() {}
+    function getTimeBasedUniqueString() {
+        var base = (new Date()).toLocaleDateString();
+        var everyHours = +(/\d*/.exec(settings.CACHE_REFRESH_TIME)); // wyciąga cyfry, wspieramy tylko liczby godzin.
+        return base + '-' + everyHours + '-' + Math.floor((new Date).getHours() / everyHours); // 0 zostaje
+                                                                                               // potraktowane jak 24h,
+                                                                                               //  25 i więcej też
+    }
+
+    function getTrackingData(cb) {
+        cb = cb || alert.bind(window);
+        var message = ['@Ginden'];
+        var table =  {
+            'Wersja skryptu': currentScriptVersion,
+            'OS/CPU': navigator.oscpu || 'undefined',
+            'Browser': navigator.userAgent,
+            'Język': navigator.language,
+            'Czas': Date(),
+            'Tryb nocny': wykop.params.settings.night_mode,
+            'Zablokowana #polityka': wykop.params.settings.show_politics,
+            'Pozwala zablokowanym pisać:': wykop.params.settings.allow_blacklisted,
+            'Dostaje powiadomienia z czarnej listy': wykop.params.settings.blacklist_notifications
+        };
+        pluginSettings.forEach(function (setting) {
+            table[setting.name +' ('+setting.slug+')'] = settings[setting.slug] || null;
+        });
+        getBlackList(function(blackData){
+            getWhiteList(function(whiteData) {
+                table['Zablokowane #nsfw'] = blackData.tags.indexOf('#nsfw') !== -1;
+                table['Liczba osób na czarnej liście'] = blackData.users.length;
+                table['Liczba tagów na czarnej liście'] = blackData.tags.length;
+                table['Liczba domen na czarnej liście'] = blackData.domains.length;
+                message.push.apply(message, Object.keys(table).map(function(key) {
+                    var val = table[key];
+                    key = key.replace(/_/g, '\\_');
+                    if (Array.isArray(val)) {
+                        val = JSON.stringify(val);
+                    }
+                    val = ((val === null || typeof val === 'undefined') ? 'null' : val);
+                    val += '';
+                    val = val.replace(/_/g, '\\_');
+                    return key + ': '+val;
+                }));
+                cb(message.join('\n'));
+            });
+        });
+    }
+
+    function noop() {
+    }
 
     var colorSortOrder = {
         1002: 100, //konto usunięte
@@ -49,6 +100,12 @@ function main() {
             slug:         'ENHANCED_BLACK_LIST',
             type:         'boolean',
             defaultValue: true
+        },
+        {
+            name: 'Pozwalaj na zbieranie danych o systemie operacyjnym, przeglądarce, wersji dodatku i rozmiarach czarnej listy',
+            slug: 'ALLOW_TRACKING',
+            type: 'boolean',
+            defaultValue: false
         },
         {
             name:         'Sortuj użytkowników na czarnej liście',
@@ -86,21 +143,21 @@ function main() {
             defaultValue: false
         },
         {
-            name:        'Częstość odświeżania cache',
-            description: 'Zmienia częstość odświeżania cache. Po zmienie dotychczasowe cache jest inwalidowane.',
-            slug:        'CACHE_REFRESH_TIME',
-            type:        'select',
+            name:         'Częstość odświeżania cache',
+            description:  'Zmienia częstość odświeżania cache. Po zmienie dotychczasowe cache jest inwalidowane.',
+            slug:         'CACHE_REFRESH_TIME',
+            type:         'select',
             defaultValue: '24h',
             values:       ['24h', '12h', '6h', '4h', '2h', '1h']
         },
         {
-            name: 'Obejrzyj ustawienia',
-            slug: 'DEBUG_SHOW_SETTINGS',
-            type: 'button',
+            name:  'Obejrzyj ustawienia',
+            slug:  'DEBUG_SHOW_SETTINGS',
+            type:  'button',
             debug: true,
-            click: function(e){
+            click: function (e) {
                 var json = {};
-                pluginSettings.forEach(function(setting) {
+                pluginSettings.forEach(function (setting) {
                     json[setting.slug] = settings[setting.slug] || null;
                 });
                 alert(JSON.stringify(json, null, 2));
@@ -142,14 +199,19 @@ function main() {
 
 
     var ENTER_KEY_CODE = 13;
+    var HIGHLIGHT_CLASS = 'type-light-warning'; // Słabo widoczne na nocnym, co robić?
     var slice = Function.prototype.call.bind([].slice);
     var map = Function.prototype.call.bind([].map);
     var forEach = Function.prototype.call.bind([].forEach);
     var trim = Function.prototype.call.bind(''.trim);
-    var getTrimmedText = function (el) {
+
+    function getTrimmedText(el) {
         return el.jquery ? el.text().trim() : el.textContent.trim();
-    };
+    }
+
     var getUserColorFromClass = (function () {
+        // cache, jako że obliczanie wartości jest dość kosztowne (trzeba wstawić do drzewa DOM, robić repaint, usuwać,
+        // kolejny repaint).
         var cache = Object.create(null);
         return function getUserColorFromClass(domClass) {
             var el, color;
@@ -171,7 +233,7 @@ function main() {
             var users = new Set(data.users);
             forEach(subtree.querySelectorAll('.usercard a'), function (el) {
                 if (users.has(el.getAttribute('title'))) {
-                    $(el.parentNode).addClass('type-light-warning');
+                    $(el.parentNode).addClass(HIGHLIGHT_CLASS);
                 }
             });
         });
@@ -180,7 +242,7 @@ function main() {
     function highlightComments(data) {
         var users = new Set(data.users);
         var comments = document.querySelectorAll('div[data-type=comment]');
-        (function next(i) {
+        onNextFrame(function next(i) {
             var el = comments[i], $el, author;
             if (!el) {
                 return;
@@ -188,10 +250,17 @@ function main() {
             $el = $(el);
             author = getTrimmedText($el.find('a.showProfileSummary b'));
             if (users.has(author)) {
-                $el.addClass('type-light-warning');
+                $el.addClass(HIGHLIGHT_CLASS);
             }
-            (i % 10 === 0) ? setTimeout(next, 0, i + 1) : next(i + 1);
-        })(0);
+            (i % 16 === 0) ? onNextFrame(next, i + 1) : next(i + 1); // po zakolorowaniu 16 komentarzy robimy przerwę
+            // by nie zabiło nam przeglądarki przy bardzo
+            // dużych znaleziskach ani nie przepełniło stosu
+            // Używana jest rekursja, bo nie wiadomo czy
+            // klient ma wsparcie dla generatorów Generatory
+            // byłyby lepsze, bo można by odmierzyć 16
+            // milisekund do 60fps
+
+        }, 0);
     }
 
     function removeUserFromCancerList(e) {
@@ -201,7 +270,7 @@ function main() {
                 return el !== nick;
             });
         console.log('Removed user ' + nick);
-        setTimeout(listCancerUsers, 4);
+        onNextFrame(listCancerUsers);
         e.preventDefault();
         return false;
     }
@@ -218,7 +287,6 @@ function main() {
             $list.append($row);
         });
     }
-
 
 
     function flushBlackListCache(cb) {
@@ -275,7 +343,12 @@ function main() {
                     return localStorage[lsKey];
                 }
             }
-            return val === undefined ? (delete localStorage[lsKey], undefined) : localStorage[lsKey] = val;
+            if (val === undefined) {
+                delete localStorage[lsKey];
+                return undefined;
+            } else {
+                return localStorage[lsKey] = val;
+            }
         }
 
     }
@@ -322,7 +395,7 @@ function main() {
         if (localStorage['black_list/date/' + getTimeBasedUniqueString()]) {
             var data = JSON.parse(localStorage['black_list/date/' + getTimeBasedUniqueString()]);
             data.entries = localStorage['black_list/entries'] ? JSON.parse(localStorage['black_list/entries']) : [];
-            setTimeout(callback.bind(null, data), 0);
+            onNextFrame(callback, data);
         }
         else {
             parseBlackList(function (data) {
@@ -333,7 +406,7 @@ function main() {
                 });
                 data.entries = localStorage['black_list/entries'] ? JSON.parse(localStorage['black_list/entries']) : [];
                 localStorage['black_list/date/' + getTimeBasedUniqueString()] = JSON.stringify(data);
-                callback(data);
+                onNextFrame(callback, data);
             });
         }
     }
@@ -341,17 +414,18 @@ function main() {
     function removeVoteGray(subtree) {
         getWhiteList(function (data) {
             var users = new Set(data.users);
-            forEach($(subtree).find('.voters-list a.gray'), function (el) {
-                if (users.has(getTrimmedText(el))) {
-                    var $el = $(el);
-                    $el.removeClass('gray');
-                    $el.addClass('observed_user');
-                    $el.attr('class').split(' ').some(function (domClass) {
+            forEach($(subtree).find('.voters-list a.gray'), function (voter) {
+                var voterNick = getTrimmedText(voter);
+                if (users.has(voterNick)) {
+                    var $voter = $(voter);
+                    $voter.removeClass('gray');
+                    $voter.addClass('observed_user');
+                    $voter.attr('class').split(' ').some(function (domClass) {
                         if (domClass.indexOf('color-') === 0) {
                             this.attr('style', 'color: ' + getUserColorFromClass(domClass) + ' !important');
                             return true;
                         }
-                    }, $el)
+                    }, $voter)
                 }
             });
         });
@@ -377,13 +451,13 @@ function main() {
         callback = callback || Function.prototype;
         if (localStorage['white_list/date/' + getTimeBasedUniqueString()]) {
             var data = JSON.parse(localStorage['white_list/date/' + getTimeBasedUniqueString()]);
-            setTimeout(callback, 0, data);
+            onNextFrame(callback, data);
         }
         else {
             parseWhiteList(function (data) {
                 flushWhiteListCache(noop);
                 localStorage['white_list/date/' + getTimeBasedUniqueString()] = JSON.stringify(data);
-                callback(data);
+                onNextFrame(callback,data);
             });
         }
     }
@@ -405,7 +479,7 @@ function main() {
             el.prevColor = (localStorage['black_list/user/' + el.nick + '/color'] || el.color) | 0;
             el.prioritize = 0;
             if (el.prevColor !== el.color) {
-                el.setAttribute('class', el.getAttribute('class') + ' type-light-warning');
+                el.setAttribute('class', el.getAttribute('class') + ' '+HIGHLIGHT_CLASS);
             }
             localStorage['black_list/user/' + el.nick + '/color'] = el.color;
             return el;
@@ -504,7 +578,7 @@ function main() {
     });
 
     pluginSettings.forEach(function (el) {
-        settings._slugs[el.slug] = el;
+        settings._slugs[el.slug] = el; // Szybki dostęp do list ustawień.
         Object.defineProperty(settings, el.slug, {
             enumerable:   true,
             configurable: false,
@@ -519,8 +593,13 @@ function main() {
     function setSwitch() {
         settings.ENHANCED_BLACK_LIST = this.checked;
         $(document.body).toggleClass('black_list_on', this.checked);
-        $label.text((this.checked ? 'wyłącz' : String.fromCharCode(160) + 'włącz') + ' #czarnolisto' + (this.checked ? ' (' + document.querySelectorAll('.ginden_black_list').length + ' zablokowanych)' : ''));
+        onNextFrame(function () {
+            $label.text((this.checked ? 'wyłącz' : String.fromCharCode(160) + 'włącz') + ' #czarnolisto' + (this.checked ? ' (' + document.querySelectorAll('.ginden_black_list').length + ' zablokowanych)' : ''));
+        }.bind(this));
     }
+
+
+
 
     $input.change(setSwitch);
     $input.prop('checked', settings.ENHANCED_BLACK_LIST);
@@ -550,6 +629,7 @@ function main() {
             getWhiteList:        getWhiteList,
             flushBlackListCache: flushBlackListCache,
             flushWhiteListCache: flushWhiteListCache,
+            getTrackingData:     getTrackingData,
             settings:            settings,
             _lines:              ['//empty line'].concat(main.toString().split('\n'))
         };
@@ -626,7 +706,7 @@ function main() {
                             e.preventDefault();
                             settings[setting.slug] = (settings[setting.slug] || []).concat(this.value.trim()).filter(onlyUnique, {}).filter(Boolean);
                             this.value = '';
-                            setTimeout(listCancerUsers, 4, $list, setting);
+                            onNextFrame(listCancerUsers, $list, setting);
 
                             return false;
                         }
@@ -640,14 +720,14 @@ function main() {
                     $input = $('<select class="margin5_0" />');
                     $input
                         .attr('id', id);
-                    $input.append.apply($input, setting.values.map(function(val){
+                    $input.append.apply($input, setting.values.map(function (val) {
                         var ret = $('<option />').text(val).val(val);
                         if (val === settings[setting.slug]) {
                             ret.attr('selected', 'selected');
                         }
                         return ret;
                     }));
-                    $input.on('change', function(){
+                    $input.on('change', function () {
                         settings[setting.slug] = $(this).val();
                     });
                     $label = $('<label />');
@@ -686,13 +766,13 @@ function main() {
             getWhiteList(highlightComments);
         }
         if (settings.CANCER_USERS.length > 0) {
-            document.addEventListener('click', function(e) {
+            document.addEventListener('click', function (e) {
                 var target = e.originalTarget;
                 if (target.tagName === 'A' && target.getAttribute('class') === 'unhide') {
                     var $el = $(target);
                     var author = getTrimmedText($el.parents('[data-type]').find('.author.ellipsis a b'));
                     if (settings.CANCER_USERS.indexOf(author) !== -1) {
-                        alert('Rozwijanie komentarzy użytkownika '+author +' jest zablokowane; Zajrzyj do ustawień by na to pozwolić.');
+                        alert('Rozwijanie komentarzy użytkownika ' + author + ' jest zablokowane; Zajrzyj do ustawień by na to pozwolić.');
                         e.stopPropagation();
                         e.preventDefault();
                         return false;
@@ -701,11 +781,39 @@ function main() {
                 }
             }, true);
         }
+        if ((localStorage['black_list/ALLOW_TRACKING']+'') === 'undefined') {
+            settings.ALLOW_TRACKING = confirm('Czy zgadzasz się na zbieranie danych o Twoim systemie, przeglądarce, używanych ustawieniach, rozmiarach czarnej listy?\ ' +
+                                              'Możesz to w każdej chwili zmienić w ustawieniach.');
+        }
+        if (settings.ALLOW_TRACKING) {
+            var key = 'black_list/tracking_'+currentScriptVersion+'_'+(new Date()).getMonth()+'_'+(new Date()).getFullYear();
+            if (!localStorage[key]) {
+                var entryId = 14431827;
+                var commentEntry = function commentEntry(message, entryId) {
+                    return $.ajax({
+                        url:  'http://www.wykop.pl/ajax2/wpis/CommentAdd/' +
+                              entryId + '/hash/' + wykop.params.hash + '/',
+                        type: 'POST',
+                        data: {
+                            '__token': wykop.params.hash,
+                            'body':    message
+                        },
+                        success: function(){
+                            localStorage[key] = Date();
+                        }
+                    });
+                };
+                getTrackingData(function(message){
+                    commentEntry(message, entryId);
+                });
+            }
+        }
     }
 
 }
 
 
 var script = document.createElement("script");
-script.textContent = "(" + main.toString() + ")();";
+var scriptVersion = typeof GM_info !== 'undefined' ? GM_info.script.version : '3.4';
+script.textContent = "(" + main.toString().replace('###', scriptVersion) + ")();";
 document.body.appendChild(script);
