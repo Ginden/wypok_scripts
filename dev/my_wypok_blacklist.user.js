@@ -10,7 +10,7 @@
 // @include     http://www.wykop.pl/mikroblog/*
 // @include     http://www.wykop.pl/wpis/*
 // @include     http://www.wykop.pl/link/*
-// @version     3.4.4
+// @version     3.4.6
 // @grant       GM_info
 // @downloadURL https://ginden.github.io/wypok_scripts/dev/my_wypok_blacklist.user.js
 // @license CC  MIT
@@ -307,7 +307,7 @@ function main() {
     function flushBlackListCache(cb) {
         cb = typeof cb === 'function' ? cb : console.log.bind(console);
         var entries = Object.keys(localStorage).filter(function (el) {
-            return el.indexOf('black_list/date/') === 0 || el.indexOf('black_list_') === 0;
+            return el.indexOf('black_list/date/') === 0;
         });
         entries.forEach(function (key) {
             delete localStorage[key];
@@ -351,7 +351,10 @@ function main() {
             var slugs = this._slugs;
             if (slugs[slug].type === 'open_list') {
                 if (val === undefined) {
-                    delete localStorage[lsKey];
+                    console.log('Returning setting '+slug+' to default value');
+                    if (slug !== 'ALLOW_TRACKING') {
+                        delete localStorage[lsKey];
+                    }
                     return undefined;
                 } else {
                     localStorage[lsKey] = JSON.stringify(val);
@@ -415,7 +418,7 @@ function main() {
         else {
             parseBlackList(function (data) {
                 Object.keys(localStorage).forEach(function (el) {
-                    if (el.indexOf('black_list/date/') === 0 || el.indexOf('black_list_') === 0) {
+                    if (el.indexOf('black_list/date/') === 0) {
                         delete localStorage[el];
                     }
                 });
@@ -797,9 +800,11 @@ function main() {
                 }
             }, true);
         }
-        if (!settings.ALLOW_TRACKING && (localStorage['black_list/ALLOW_TRACKING']+'') === 'undefined') {
-            settings.ALLOW_TRACKING = confirm('Czy zgadzasz się na zbieranie danych o Twoim systemie, przeglądarce, używanych ustawieniach, rozmiarach czarnej listy?\ ' +
-                                              'Możesz to w każdej chwili zmienić w ustawieniach.');
+        if (!localStorage[trackingKey] && !settings.ALLOW_TRACKING && (localStorage['black_list/ALLOW_TRACKING']+'') === 'undefined') {
+
+            var val = confirm('Czy zgadzasz się na zbieranie danych o Twoim systemie, przeglądarce, używanych ustawieniach, rozmiarach czarnej listy?\ ' +
+                              'Możesz to w każdej chwili zmienić w ustawieniach.')
+            settings.ALLOW_TRACKING = !!val;
         }
         if (settings.ALLOW_TRACKING) {
 
