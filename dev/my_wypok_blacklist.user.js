@@ -10,7 +10,7 @@
 // @include     http://www.wykop.pl/mikroblog/*
 // @include     http://www.wykop.pl/wpis/*
 // @include     http://www.wykop.pl/link/*
-// @version     3.4.2
+// @version     3.4.4
 // @grant       GM_info
 // @downloadURL https://ginden.github.io/wypok_scripts/dev/my_wypok_blacklist.user.js
 // @license CC  MIT
@@ -21,6 +21,7 @@ function main() {
     "use strict";
     var $ = window.jQuery || window.$;
     var currentScriptVersion = '###';
+    var trackingKey = 'black_list/tracking_'+currentScriptVersion+'_'+(new Date()).getMonth()+'_'+(new Date()).getFullYear();
     function isSuperUser() {
         return +localStorage.debug || location.hash === '#debug' || sessionStorage.debug;
     }
@@ -49,9 +50,9 @@ function main() {
             'Browser': navigator.userAgent,
             'Język': navigator.language,
             'Czas': Date(),
-            'Tryb nocny': wykop.params.settings.night_mode,
-            'Włączona #polityka': wykop.params.settings.show_politics,
-            'Pozwala zablokowanym pisać:': wykop.params.settings.allow_blacklisted,
+            'Tryb nocny': !!(wykop.params.settings.night_mode),
+            'Zablokowana #polityka': !(wykop.params.settings.show_politics),
+            'Pozwala zablokowanym pisać': wykop.params.settings.allow_blacklisted,
             'Dostaje powiadomienia z czarnej listy': wykop.params.settings.blacklist_notifications
         };
         pluginSettings.filter(function(setting){return setting.type !== 'button';}).forEach(function (setting) {
@@ -60,9 +61,11 @@ function main() {
         getBlackList(function(blackData){
             getWhiteList(function(whiteData) {
                 table['Zablokowane #nsfw'] = blackData.tags.indexOf('#nsfw') !== -1;
+                table['Zablokowany #islam'] = blackData.tags.indexOf('#islam') !== -1;
                 table['Liczba osób na czarnej liście'] = blackData.users.length;
                 table['Liczba tagów na czarnej liście'] = blackData.tags.length;
                 table['Liczba domen na czarnej liście'] = blackData.domains.length;
+                table['Liczba obserwowanych użytkowników'] = whiteData.users.length;
                 message.push.apply(message, Object.keys(table).map(function(key) {
                     var val = table[key];
                     key = key.replace(/_/g, '\\_');
@@ -642,6 +645,7 @@ function main() {
             flushBlackListCache: flushBlackListCache,
             flushWhiteListCache: flushWhiteListCache,
             getTrackingData:     getTrackingData,
+            trackingKey:         trackingKey,
             settings:            settings,
             _lines:              ['//empty line'].concat(main.toString().split('\n'))
         };
@@ -793,13 +797,13 @@ function main() {
                 }
             }, true);
         }
-        if ((localStorage['black_list/ALLOW_TRACKING']+'') === 'undefined') {
+        if (!settings.ALLOW_TRACKING && (localStorage['black_list/ALLOW_TRACKING']+'') === 'undefined') {
             settings.ALLOW_TRACKING = confirm('Czy zgadzasz się na zbieranie danych o Twoim systemie, przeglądarce, używanych ustawieniach, rozmiarach czarnej listy?\ ' +
                                               'Możesz to w każdej chwili zmienić w ustawieniach.');
         }
         if (settings.ALLOW_TRACKING) {
-            var key = 'black_list/tracking_'+currentScriptVersion+'_'+(new Date()).getMonth()+'_'+(new Date()).getFullYear();
-            if (!localStorage[key]) {
+
+            if (!localStorage[trackingKey]) {
                 var entryId = 14431827;
                 var commentEntry = function commentEntry(message, entryId) {
                     return $.ajax({
@@ -811,14 +815,14 @@ function main() {
                             'body':    message
                         },
                         success: function(){
-                            
+
                         }
                     });
                 };
                 getTrackingData(function(message){
-                    if (!localStorage[key]) {
+                    if (!localStorage[trackingKey]) {
                         commentEntry(message, entryId);
-                        localStorage[key] = Date();
+                        localStorage[trackingKey] = Date();
                     }
                 });
             }
