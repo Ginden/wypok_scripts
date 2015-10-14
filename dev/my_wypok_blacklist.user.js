@@ -849,6 +849,6 @@ function main() {
 
 
 var script = document.createElement("script");
-var scriptVersion = typeof GM_info !== 'undefined' ? GM_info.script.version : '3.4';
+var scriptVersion = typeof GM_info !== 'undefined' ? GM_info.script.version : '4.0';
 script.textContent = "(" + main.toString().replace('###', scriptVersion) + ")();";
 document.body.appendChild(script);
