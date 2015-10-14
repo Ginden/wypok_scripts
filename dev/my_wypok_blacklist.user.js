@@ -10,11 +10,17 @@
 // @include     http://www.wykop.pl/mikroblog/*
 // @include     http://www.wykop.pl/wpis/*
 // @include     http://www.wykop.pl/link/*
-// @version     3.4.6
+// @version     3.5.0
 // @grant       GM_info
 // @downloadURL https://ginden.github.io/wypok_scripts/dev/my_wypok_blacklist.user.js
 // @license CC  MIT
 // ==/UserScript==
+
+/*
+ Współautorzy:
+ - kondominium-rosyjsko-niemieckie napisał wycinanie komentarzy kancerogennych użytkowników
+ */
+
 
 
 function main() {
@@ -257,6 +263,9 @@ function main() {
     function highlightComments(data) {
         var users = new Set(data.users);
         var comments = document.querySelectorAll('div[data-type=comment]');
+        var cancerUsers = new Set(settings.CANCER_USERS); // lista cancerów
+
+
         onNextFrame(function next(i) {
             var el = comments[i], $el, author;
             if (!el) {
@@ -266,8 +275,10 @@ function main() {
             author = getTrimmedText($el.find('a.showProfileSummary b'));
             if (users.has(author)) {
                 $el.addClass(HIGHLIGHT_CLASS);
+            } else if (cancerUsers.has(author)) {
+                $el.addClass('deleted');
             }
-            (i % 16 === 0) ? onNextFrame(next, i + 1) : next(i + 1); // po zakolorowaniu 16 komentarzy robimy przerwę
+            (i % 16 === 0) ? onNextFrame(next, i + 1) : next(i + 1); // po przejechaniu 16 komentarzy robimy przerwę
             // by nie zabiło nam przeglądarki przy bardzo
             // dużych znaleziskach ani nie przepełniło stosu
             // Używana jest rekursja, bo nie wiadomo czy
