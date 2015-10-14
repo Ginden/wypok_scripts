@@ -10,10 +10,10 @@
 // @include     http://www.wykop.pl/mikroblog/*
 // @include     http://www.wykop.pl/wpis/*
 // @include     http://www.wykop.pl/link/*
-// @version     3.5.0
+// @version     4.0.0
 // @grant       GM_info
 // @downloadURL https://ginden.github.io/wypok_scripts/dev/my_wypok_blacklist.user.js
-// @license CC  MIT
+// @license     MIT
 // ==/UserScript==
 
 /*
