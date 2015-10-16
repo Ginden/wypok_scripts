@@ -10,7 +10,7 @@
 // @include     http://www.wykop.pl/mikroblog/*
 // @include     http://www.wykop.pl/wpis/*
 // @include     http://www.wykop.pl/link/*
-// @version     4.0.0
+// @version     4.1.0
 // @grant       GM_info
 // @downloadURL https://ginden.github.io/wypok_scripts/dev/my_wypok_blacklist.user.js
 // @license     MIT
@@ -61,9 +61,39 @@ function main() {
             'Pozwala zablokowanym pisać': wykop.params.settings.allow_blacklisted,
             'Dostaje powiadomienia z czarnej listy': wykop.params.settings.blacklist_notifications
         };
+        var features = {
+            Set: 'return new Set();',
+            WeakMap: 'return new WeakMap();',
+            'let': 'let a = 3; return a;',
+            'backquote': 'return `wow`;',
+            'arrow-functions': 'return a=>(a+1);',
+            'generators': 'return function*(){yield 3;}',
+            Reflect: 'return typeof Reflect !== "undefined"',
+            Symbol: 'return typeof Symbol !== "undefined"',
+            'Symbol.iterator': 'return typeof Symbol.iterator !== "undefined"'
+        };
         pluginSettings.filter(function(setting){return setting.type !== 'button';}).forEach(function (setting) {
             table[setting.name +' ('+setting.slug+')'] = settings[setting.slug] || null;
         });
+        var supportedFeatures = [];
+        var unsupportedFeatures = [];
+        Object.keys(features).map(function(feature){
+            var code = features[feature];
+            var val = false;
+            try {
+                val = Function(code)()
+            } catch(e) {
+                val = false;
+            }
+            if (val) {
+                supportedFeatures.push(feature);
+            } else {
+                unsupportedFeatures.push(feature);
+            }
+        });
+        table['Supported browser features'] = supportedFeatures.join(', ') || undefined;
+        table['Unsupported browser features'] = unsupportedFeatures.join(', ') || undefined;
+
         getBlackList(function(blackData){
             getWhiteList(function(whiteData) {
                 table['Zablokowane #nsfw'] = blackData.tags.indexOf('#nsfw') !== -1;
