@@ -10,7 +10,7 @@
 // @include     http://www.wykop.pl/mikroblog/*
 // @include     http://www.wykop.pl/wpis/*
 // @include     http://www.wykop.pl/link/*
-// @version     4.3.0
+// @version     4.3.1
 // @grant       GM_info
 // @downloadURL https://ginden.github.io/wypok_scripts/dev/my_wypok_blacklist.user.js
 // @license     MIT
@@ -918,6 +918,6 @@ function main() {
 
 
 var script = document.createElement("script");
-var scriptVersion = typeof GM_info !== 'undefined' ? GM_info.script.version : '4.0';
+var scriptVersion = typeof GM_info !== 'undefined' ? GM_info.script.version : '4.3';
 script.textContent = "(" + main.toString().replace('###', scriptVersion) + ")();";
 document.body.appendChild(script);
