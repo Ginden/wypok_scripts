@@ -10,7 +10,7 @@
 // @include     http://www.wykop.pl/mikroblog/*
 // @include     http://www.wykop.pl/wpis/*
 // @include     http://www.wykop.pl/link/*
-// @version     4.1.0
+// @version     4.3.0
 // @grant       GM_info
 // @downloadURL https://ginden.github.io/wypok_scripts/dev/my_wypok_blacklist.user.js
 // @license     MIT
@@ -19,6 +19,7 @@
 /*
  Współautorzy:
  - kondominium-rosyjsko-niemieckie napisał wycinanie komentarzy kancerogennych użytkowników
+ - megawatt za blokowanie przypadkowego zamknięcia karty
  */
 
 
@@ -63,7 +64,11 @@ function main() {
         };
         var features = {
             Set: 'return new Set();',
+            Map: 'return new Map()',
             WeakMap: 'return new WeakMap();',
+            WeakSet: 'return new WeakSet();',
+            Promise: 'return new Promise(function(){});',
+            'basic destructuring': 'var {a,b} = {a: 1, b:1}',
             'let': 'let a = 3; return a;',
             'backquote': 'return `wow`;',
             'arrow-functions': 'return a=>(a+1);',
@@ -91,8 +96,8 @@ function main() {
                 unsupportedFeatures.push(feature);
             }
         });
-        table['Supported browser features'] = supportedFeatures.join(', ') || undefined;
-        table['Unsupported browser features'] = unsupportedFeatures.join(', ') || undefined;
+        table['Supported browser features'] = supportedFeatures.sort().join(', ') || undefined;
+        table['Unsupported browser features'] = unsupportedFeatures.sort().join(', ') || undefined;
 
         getBlackList(function(blackData){
             getWhiteList(function(whiteData) {
@@ -180,6 +185,13 @@ function main() {
             slug:         'HILIGHT_COMMENTS',
             type:         'boolean',
             defaultValue: false
+        },
+        {
+            name:         'Blokuj przypadkowe usunięcie treści',
+            description:  'Blokuj przypadkowe usunięcie treści',
+            slug:         'PREVENT_ACCIDENTAL_REMOVE',
+            type:         'boolean',
+            defaultValue: true
         },
         {
             name:         'Częstość odświeżania cache',
@@ -825,6 +837,33 @@ function main() {
         if (settings.HILIGHT_COMMENTS && wykop.params.action === 'link') {
             getWhiteList(highlightComments);
         }
+        if (settings.PREVENT_ACCIDENTAL_REMOVE && typeof WeakMap === 'function') {
+            var firstValues = new WeakMap();
+            window.onbeforeunload = function(e){
+                function isModified(el){
+                    var savedValue = firstValues.get(el);
+                    if (savedValue === undefined || el.value === '') {
+                        return false;
+                    } else {
+                        return el.value !== savedValue;
+                    }
+                }
+                if ([].some.call(document.querySelectorAll('textarea'), isModified)) {
+                    e.returnValue = 'yeah';
+                    return 'Are you sure';
+                }
+            };
+            var handleEvent = function handleEvent(e) {
+                if(firstValues.get(this) === undefined) {
+                    firstValues.set(this, this.value);
+                }
+            }
+            $(document.body).on("click focus select", "textarea", handleEvent);
+            [].forEach.call(document.querySelectorAll('textarea'), handleEvent);
+        }
+
+
+
         if (settings.CANCER_USERS.length > 0) {
             document.addEventListener('click', function (e) {
                 var target = e.originalTarget;
