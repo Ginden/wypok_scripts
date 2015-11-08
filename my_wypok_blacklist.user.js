@@ -10,7 +10,7 @@
 // @include     http://www.wykop.pl/mikroblog/*
 // @include     http://www.wykop.pl/wpis/*
 // @include     http://www.wykop.pl/link/*
-// @version     3.5.0
+// @version     4.5.0
 // @grant       GM_info
 // @downloadURL https://ginden.github.io/wypok_scripts/my_wypok_blacklist.user.js
 // @license     MIT
@@ -19,25 +19,55 @@
 /*
  Współautorzy:
  - kondominium-rosyjsko-niemieckie napisał wycinanie komentarzy kancerogennych użytkowników
+ - megawatt za blokowanie przypadkowego zamknięcia karty
  */
-
 
 
 function main() {
     "use strict";
     var $ = window.jQuery || window.$;
     var currentScriptVersion = '###';
-    var trackingKey = 'black_list/tracking_'+currentScriptVersion+'_'+(new Date()).getMonth()+'_'+(new Date()).getFullYear();
+    var trackingKey = 'black_list/tracking_' + currentScriptVersion + '_' + (new Date()).getMonth() + '_' + (new Date()).getFullYear();
+    var hash = '';
+
     function isSuperUser() {
         return +localStorage.debug || location.hash === '#debug' || sessionStorage.debug;
     }
 
-    function onNextFrame(func) {
-        var args = [].slice.call(arguments,1);
-        requestAnimationFrame(function(){
-            return func.apply(this, args);
-        });
-    }
+    var onNextFrame = (function () {
+        var queue = [];
+        var running = false;
+        return function onNextFrameInternal(func) {
+            var args = [].slice.call(arguments, 1);
+            queue.push({
+                func: func,
+                args: args
+            });
+            if (running === false) {
+                running = true;
+                process();
+            }
+        };
+        function process() {
+            var endTime = Date.now() + 16;
+            var el;
+            do {
+                el = queue.shift();
+                try {
+                    el.func.apply(null, el.args);
+                } catch (e) {
+                    break;
+                }
+            } while (queue.length && endTime > Date.now());
+
+            if (queue.length === 0) {
+                running = false;
+            } else {
+                requestAnimationFrame(process);
+            }
+        }
+    }());
+
 
     function getTimeBasedUniqueString() {
         var base = (new Date()).toLocaleDateString();
@@ -47,32 +77,101 @@ function main() {
                                                                                                //  25 i więcej też
     }
 
+    function Lock(name) {
+        this.name = name;
+        this.slug = '***' + this.name + '***';
+        return this;
+    }
+
+    Lock.prototype.aquire = function (maxSeconds) {
+        this.from = (this.state = Math.floor(Date.now() / 1000) + maxSeconds);
+    };
+    Lock.prototype.release = function () {
+        if (this.state <= this.from) {
+            this.state = null;
+        }
+    };
+    Lock.prototype.check = function () {
+        return (Number(this.state) || 0) < Math.floor(Date.now() / 1000);
+    };
+
+    Object.defineProperty(Lock.prototype, 'state', {
+        get: function () {
+            return localStorage[this.slug];
+        },
+        set: function (val) {
+            if (val == undefined) {
+                delete localStorage[this.slug];
+            } else {
+                localStorage[this.slug] = val;
+                return localStorage[this.slug];
+            }
+        }
+    });
+
     function getTrackingData(cb) {
         cb = cb || alert.bind(window);
         var message = ['@Ginden'];
-        var table =  {
-            'Wersja skryptu': currentScriptVersion,
-            'OS/CPU': navigator.oscpu || 'undefined',
-            'Browser': navigator.userAgent,
-            'Język': navigator.language,
-            'Czas': Date(),
-            'Tryb nocny': !!(wykop.params.settings.night_mode),
-            'Zablokowana #polityka': !(wykop.params.settings.show_politics),
-            'Pozwala zablokowanym pisać': wykop.params.settings.allow_blacklisted,
+        var table = {
+            'Wersja skryptu':                        currentScriptVersion,
+            'OS/CPU':                                navigator.oscpu || 'undefined',
+            'Browser':                               navigator.userAgent,
+            'Język':                                 navigator.language,
+            'Czas':                                  Date(),
+            'Tryb nocny':                            !!(wykop.params.settings.night_mode),
+            'Zablokowana #polityka':                 !(wykop.params.settings.show_politics),
+            'Pozwala zablokowanym pisać':            wykop.params.settings.allow_blacklisted,
             'Dostaje powiadomienia z czarnej listy': wykop.params.settings.blacklist_notifications
         };
-        pluginSettings.filter(function(setting){return setting.type !== 'button';}).forEach(function (setting) {
-            table[setting.name +' ('+setting.slug+')'] = settings[setting.slug] || null;
+        var features = {
+            Set:                   'return new Set();',
+            Map:                   'return new Map()',
+            WeakMap:               'return new WeakMap();',
+            WeakSet:               'return new WeakSet();',
+            Promise:               'return new Promise(function(){});',
+            'basic destructuring': 'var {a,b} = {a: 1, b:1}',
+            'let':                 'let a = 3; return a;',
+            'backquote':           'return `wow`;',
+            'arrow-functions':     'return a=>(a+1);',
+            'generators':          'return function*(){yield 3;}',
+            Reflect:               'return typeof Reflect !== "undefined"',
+            Symbol:                'return typeof Symbol !== "undefined"',
+            'Symbol.iterator':     'return typeof Symbol.iterator !== "undefined"',
+            'rest arguments':      'return function(...a){return a;};'
+        };
+        pluginSettings.filter(function (setting) {
+            return setting.type !== 'button';
+        }).forEach(function (setting) {
+            table[setting.name + ' (' + setting.slug + ')'] = settings[setting.slug] || null;
         });
-        getBlackList(function(blackData){
-            getWhiteList(function(whiteData) {
+        var supportedFeatures = [];
+        var unsupportedFeatures = [];
+        Object.keys(features).map(function (feature) {
+            var code = features[feature];
+            var val = false;
+            try {
+                val = Function(code)()
+            } catch (e) {
+                val = false;
+            }
+            if (val) {
+                supportedFeatures.push(feature);
+            } else {
+                unsupportedFeatures.push(feature);
+            }
+        });
+        table['Supported browser features'] = supportedFeatures.sort().join(', ') || undefined;
+        table['Unsupported browser features'] = unsupportedFeatures.sort().join(', ') || undefined;
+
+        getBlackList(function (blackData) {
+            getWhiteList(function (whiteData) {
                 table['Zablokowane #nsfw'] = blackData.tags.indexOf('#nsfw') !== -1;
                 table['Zablokowany #islam'] = blackData.tags.indexOf('#islam') !== -1;
                 table['Liczba osób na czarnej liście'] = blackData.users.length;
                 table['Liczba tagów na czarnej liście'] = blackData.tags.length;
                 table['Liczba domen na czarnej liście'] = blackData.domains.length;
                 table['Liczba obserwowanych użytkowników'] = whiteData.users.length;
-                message.push.apply(message, Object.keys(table).map(function(key) {
+                message.push.apply(message, Object.keys(table).map(function (key) {
                     var val = table[key];
                     key = key.replace(/_/g, '\\_');
                     if (Array.isArray(val)) {
@@ -81,7 +180,7 @@ function main() {
                     val = ((val === null || typeof val === 'undefined') ? 'null' : val);
                     val += '';
                     val = val.replace(/_/g, '\\_');
-                    return key + ': '+val;
+                    return key + ': ' + val;
                 }));
                 cb(message.join('\n'));
             });
@@ -111,9 +210,9 @@ function main() {
             defaultValue: true
         },
         {
-            name: 'Pozwalaj na zbieranie danych o systemie operacyjnym, przeglądarce, wersji dodatku i rozmiarach czarnej listy',
-            slug: 'ALLOW_TRACKING',
-            type: 'boolean',
+            name:         'Pozwalaj na zbieranie danych o systemie operacyjnym, przeglądarce, wersji dodatku i rozmiarach czarnej listy',
+            slug:         'ALLOW_TRACKING',
+            type:         'boolean',
             defaultValue: false
         },
         {
@@ -150,6 +249,28 @@ function main() {
             slug:         'HILIGHT_COMMENTS',
             type:         'boolean',
             defaultValue: false
+        },
+        {
+            name:         'Blokuj przypadkowe usunięcie treści',
+            description:  'Blokuj przypadkowe usunięcie treści',
+            slug:         'PREVENT_ACCIDENTAL_REMOVE',
+            type:         'boolean',
+            defaultValue: true
+        },
+        {
+            name: 'Pokazuj powiadomienia z informacjami o aktualizacji',
+            description: '',
+            slug: 'SHOW_CHANGELOG',
+            type: 'boolean',
+            defaultValue: true
+        },
+        {
+            name:         'Styl blokady',
+            description:  'Zmienia styl przycisku blokady',
+            slug:         'BLOCK_BUTTON_STYLE',
+            type:         'select',
+            defaultValue: 'ikona kłódki',
+            values:       ['tekst', 'ikona kłódki']
         },
         {
             name:         'Częstość odświeżania cache',
@@ -278,14 +399,7 @@ function main() {
             } else if (cancerUsers.has(author)) {
                 $el.addClass('deleted');
             }
-            (i % 16 === 0) ? onNextFrame(next, i + 1) : next(i + 1); // po przejechaniu 16 komentarzy robimy przerwę
-            // by nie zabiło nam przeglądarki przy bardzo
-            // dużych znaleziskach ani nie przepełniło stosu
-            // Używana jest rekursja, bo nie wiadomo czy
-            // klient ma wsparcie dla generatorów Generatory
-            // byłyby lepsze, bo można by odmierzyć 16
-            // milisekund do 60fps
-
+            onNextFrame(next, i + 1);
         }, 0);
     }
 
@@ -362,7 +476,7 @@ function main() {
             var slugs = this._slugs;
             if (slugs[slug].type === 'open_list') {
                 if (val === undefined) {
-                    console.log('Returning setting '+slug+' to default value');
+                    console.log('Returning setting ' + slug + ' to default value');
                     if (slug !== 'ALLOW_TRACKING') {
                         delete localStorage[lsKey];
                     }
@@ -419,7 +533,16 @@ function main() {
         }
     }
 
+    function retry(func) {
+        var args = [].slice.call(arguments, 1);
+        onNextFrame(function () {
+            return func(args);
+        });
+    }
+
+
     function getBlackList(callback) {
+        var lock = new Lock('black list');
         callback = callback || Function.prototype;
         if (localStorage['black_list/date/' + getTimeBasedUniqueString()]) {
             var data = JSON.parse(localStorage['black_list/date/' + getTimeBasedUniqueString()]);
@@ -427,7 +550,15 @@ function main() {
             onNextFrame(callback, data);
         }
         else {
+            if (lock.check()) {
+                lock.aquire(3);
+            } else {
+                retry(getBlackList, callback);
+                return;
+            }
+
             parseBlackList(function (data) {
+                lock.release();
                 Object.keys(localStorage).forEach(function (el) {
                     if (el.indexOf('black_list/date/') === 0) {
                         delete localStorage[el];
@@ -454,7 +585,7 @@ function main() {
                             this.attr('style', 'color: ' + getUserColorFromClass(domClass) + ' !important');
                             return true;
                         }
-                    }, $voter)
+                    }, $voter);
                 }
             });
         });
@@ -477,16 +608,24 @@ function main() {
     }
 
     function getWhiteList(callback) {
+        var lock = new Lock('white list');
+
         callback = callback || Function.prototype;
         if (localStorage['white_list/date/' + getTimeBasedUniqueString()]) {
             var data = JSON.parse(localStorage['white_list/date/' + getTimeBasedUniqueString()]);
             onNextFrame(callback, data);
         }
         else {
+            if (lock.check()) {
+                lock.aquire(3);
+            } else {
+                retry(getWhiteList, callback);
+                return;
+            }
             parseWhiteList(function (data) {
                 flushWhiteListCache(noop);
                 localStorage['white_list/date/' + getTimeBasedUniqueString()] = JSON.stringify(data);
-                onNextFrame(callback,data);
+                onNextFrame(callback, data);
             });
         }
     }
@@ -508,7 +647,7 @@ function main() {
             el.prevColor = (localStorage['black_list/user/' + el.nick + '/color'] || el.color) | 0;
             el.prioritize = 0;
             if (el.prevColor !== el.color) {
-                el.setAttribute('class', el.getAttribute('class') + ' '+HIGHLIGHT_CLASS);
+                el.setAttribute('class', el.getAttribute('class') + ' ' + HIGHLIGHT_CLASS);
             }
             localStorage['black_list/user/' + el.nick + '/color'] = el.color;
             return el;
@@ -618,16 +757,26 @@ function main() {
 
     var $input = $('<input type="checkbox" id="black_list_toggle" name="black_list_toggle" />');
     var $label = $('<label for="black_list_toggle" />');
+    var blockButtonStyle = settings.BLOCK_BUTTON_STYLE;
 
     function setSwitch() {
-        settings.ENHANCED_BLACK_LIST = this.checked;
-        $(document.body).toggleClass('black_list_on', this.checked);
-        onNextFrame(function () {
-            $label.text((this.checked ? 'wyłącz' : String.fromCharCode(160) + 'włącz') + ' #czarnolisto' + (this.checked ? ' (' + document.querySelectorAll('.ginden_black_list').length + ' zablokowanych)' : ''));
-        }.bind(this));
+        var that = this;
+        settings.ENHANCED_BLACK_LIST = that.checked;
+        $(document.body).toggleClass('black_list_on', that.checked);
+        if (blockButtonStyle === 'tekst') {
+            onNextFrame(function () {
+                $label.text((that.checked ? 'wyłącz' : String.fromCharCode(160) + 'włącz') + ' #czarnolisto' + (that.checked ? ' (' + document.querySelectorAll('.ginden_black_list').length + ' zablokowanych)' : ''));
+            });
+        } else if (blockButtonStyle === 'ikona kłódki') {
+            onNextFrame(function () {
+                if (that.checked) {
+                    $label.html('<i class="fa fa-unlock" /> ('+document.querySelectorAll('.ginden_black_list').length+')');
+                } else {
+                    $label.html('<i class="fa fa-lock" />');
+                }
+            });
+        }
     }
-
-
 
 
     $input.change(setSwitch);
@@ -795,6 +944,35 @@ function main() {
         if (settings.HILIGHT_COMMENTS && wykop.params.action === 'link') {
             getWhiteList(highlightComments);
         }
+        if (settings.PREVENT_ACCIDENTAL_REMOVE && typeof WeakMap === 'function') {
+            var firstValues = new WeakMap();
+            window.onbeforeunload = function (e) {
+                function isModified(el) {
+                    var savedValue = firstValues.get(el);
+                    if (savedValue === undefined || el.value === '') {
+                        return false;
+                    } else {
+                        return el.value !== savedValue;
+                    }
+                }
+
+                if ([].some.call(document.querySelectorAll('textarea'), isModified)) {
+                    e.returnValue = 'yeah';
+                    return 'Are you sure';
+                }
+            };
+            var handleEvent = function handleEvent(e) {
+                if (firstValues.get(this) === undefined) {
+                    firstValues.set(this, this.value);
+                }
+            };
+            $(document.body).on("click focus select", "textarea", handleEvent);
+            [].forEach.call(document.querySelectorAll('textarea'), function (el) {
+                handleEvent.call(el);
+            });
+        }
+
+
         if (settings.CANCER_USERS.length > 0) {
             document.addEventListener('click', function (e) {
                 var target = e.originalTarget;
@@ -811,10 +989,15 @@ function main() {
                 }
             }, true);
         }
-        if (!localStorage[trackingKey] && !settings.ALLOW_TRACKING && (localStorage['black_list/ALLOW_TRACKING']+'') === 'undefined') {
+
+        if (blockButtonStyle === 'ikona kłódki') {
+            $label.addClass('button');
+        }
+
+        if (!localStorage[trackingKey] && !settings.ALLOW_TRACKING && (localStorage['black_list/ALLOW_TRACKING'] + '') === 'undefined') {
 
             var val = confirm('Czy zgadzasz się na zbieranie danych o Twoim systemie, przeglądarce, używanych ustawieniach, rozmiarach czarnej listy?\ ' +
-                              'Możesz to w każdej chwili zmienić w ustawieniach.')
+                              'Możesz to w każdej chwili zmienić w ustawieniach.');
             settings.ALLOW_TRACKING = !!val;
         }
         if (settings.ALLOW_TRACKING) {
@@ -823,19 +1006,19 @@ function main() {
                 var entryId = 14431827;
                 var commentEntry = function commentEntry(message, entryId) {
                     return $.ajax({
-                        url:  'http://www.wykop.pl/ajax2/wpis/CommentAdd/' +
-                              entryId + '/hash/' + wykop.params.hash + '/',
-                        type: 'POST',
-                        data: {
+                        url:     'http://www.wykop.pl/ajax2/wpis/CommentAdd/' +
+                                 entryId + '/hash/' + wykop.params.hash + '/',
+                        type:    'POST',
+                        data:    {
                             '__token': wykop.params.hash,
                             'body':    message
                         },
-                        success: function(){
+                        success: function () {
 
                         }
                     });
                 };
-                getTrackingData(function(message){
+                getTrackingData(function (message) {
                     if (!localStorage[trackingKey]) {
                         commentEntry(message, entryId);
                         localStorage[trackingKey] = Date();
@@ -849,6 +1032,7 @@ function main() {
 
 
 var script = document.createElement("script");
-var scriptVersion = typeof GM_info !== 'undefined' ? GM_info.script.version : '3.5';
-script.textContent = "(" + main.toString().replace('###', scriptVersion) + ")();";
+var scriptVersion = typeof GM_info !== 'undefined' ? GM_info.script.version : '4.5';
+
+script.textContent = "try { (" + main.toString().replace('###', scriptVersion) + ")(); } catch(e) {console.error(e); throw e;}";
 document.body.appendChild(script);
