@@ -10,7 +10,7 @@
 // @include     http://www.wykop.pl/mikroblog/*
 // @include     http://www.wykop.pl/wpis/*
 // @include     http://www.wykop.pl/link/*
-// @version     4.4.1
+// @version     5.6.1
 // @grant       GM_info
 // @downloadURL https://ginden.github.io/wypok_scripts/dev/my_wypok_blacklist.user.js
 // @license     MIT
@@ -33,7 +33,9 @@ function main() {
     function isSuperUser() {
         return +localStorage.debug || location.hash === '#debug' || sessionStorage.debug;
     }
-
+    if (isSuperUser()) {
+        window.onerror = function(e){ console.log({Error: e, stack: e.stack}); };
+    }
     var onNextFrame = (function () {
         var queue = [];
         var running = false;
@@ -68,6 +70,13 @@ function main() {
         }
     }());
 
+    var shortenedReasons = {
+        'Propagowanie nienawiści lub przemocy, treści drastyczne': 'nienawiść, przemoc',
+        'To jest multikonto': 'multikonto',
+        'Treści o charakterze pornograficznym': 'porno',
+        'Atakuje mnie lub narusza moje dobra osobiste': 'atakuje mnie',
+        'Nieprawidłowe tagi': 'tagi'
+    };
 
     function getTimeBasedUniqueString() {
         var base = (new Date()).toLocaleDateString();
@@ -117,9 +126,9 @@ function main() {
             'OS/CPU':                                navigator.oscpu || 'undefined',
             'Browser':                               navigator.userAgent,
             'Język':                                 navigator.language,
-            'Czas':                                  Date(),
+            'Czas':                                  formatDate('YYYY-MM-DD hh:mm:ss', new Date()),
             'Tryb nocny':                            !!(wykop.params.settings.night_mode),
-            'Zablokowana #polityka':                 !(wykop.params.settings.show_politics),
+            'Zablokowana polityka':                  !(wykop.params.settings.show_politics),
             'Pozwala zablokowanym pisać':            wykop.params.settings.allow_blacklisted,
             'Dostaje powiadomienia z czarnej listy': wykop.params.settings.blacklist_notifications
         };
@@ -138,6 +147,7 @@ function main() {
             Symbol:                'return typeof Symbol !== "undefined"',
             'Symbol.iterator':     'return typeof Symbol.iterator !== "undefined"',
             'rest arguments':      'return function(...a){return a;};'
+
         };
         pluginSettings.filter(function (setting) {
             return setting.type !== 'button';
@@ -150,7 +160,7 @@ function main() {
             var code = features[feature];
             var val = false;
             try {
-                val = Function(code)()
+                val = Function(code)();
             } catch (e) {
                 val = false;
             }
@@ -165,8 +175,10 @@ function main() {
 
         getBlackList(function (blackData) {
             getWhiteList(function (whiteData) {
-                table['Zablokowane #nsfw'] = blackData.tags.indexOf('#nsfw') !== -1;
-                table['Zablokowany #islam'] = blackData.tags.indexOf('#islam') !== -1;
+                table['Zablokowane nsfw'] = blackData.tags.indexOf('#nsfw') !== -1;
+                table['Zablokowany islam'] = blackData.tags.indexOf('#islam') !== -1;
+                table['Zablokowany randomanimeshit'] = blackData.tags.indexOf('#randomanimeshit') !== -1;
+
                 table['Liczba osób na czarnej liście'] = blackData.users.length;
                 table['Liczba tagów na czarnej liście'] = blackData.tags.length;
                 table['Liczba domen na czarnej liście'] = blackData.domains.length;
@@ -258,10 +270,17 @@ function main() {
             defaultValue: true
         },
         {
-            name: 'Pokazuj powiadomienia z informacjami o aktualizacji',
-            description: '',
-            slug: 'SHOW_CHANGELOG',
-            type: 'boolean',
+            name:         'Pokazuj powiadomienia z informacjami o aktualizacji',
+            description:  '',
+            slug:         'SHOW_CHANGELOG',
+            type:         'boolean',
+            defaultValue: true
+        },
+        {
+            name:         'Pokazuj boksy z informacjami o wymoderowanych',
+            description:  'dd',
+            slug:         'SHOW_REPORT_BOXES',
+            type:         'boolean',
             defaultValue: true
         },
         {
@@ -350,6 +369,25 @@ function main() {
     function getTrimmedText(el) {
         return el.jquery ? el.text().trim() : el.textContent.trim();
     }
+
+    function timeAgo(timeInPast, timeNow) {
+        timeInPast = new Date(timeInPast);
+        timeNow = timeNow ? new Date(timeNow) : new Date();
+        var timeDiff = Math.floor((timeNow - timeInPast)/1000);
+        if (timeDiff < 60) {
+            return timeDiff + ' sek.';
+        } else if (timeDiff < 60*60) {
+            return Math.floor(timeDiff/60)+' min.';
+        } else if (timeDiff < 24*60*60) {
+            return Math.floor(timeDiff/(60*60)) +' godz.';
+        } else if (timeDiff < 30*24*60*60) {
+            return Math.floor(timeDiff/(24*60*60)) +' dni';
+        } else {
+            return Math.floor(timeDiff/(30*24*60*60)) +' mies.';
+        }
+    }
+
+
 
     var getUserColorFromClass = (function () {
         // cache, jako że obliczanie wartości jest dość kosztowne (trzeba wstawić do drzewa DOM, robić repaint, usuwać,
@@ -506,6 +544,21 @@ function main() {
         return a === b ? 0 : (a > b ? 1 : -1);
     }
 
+    function formatDate(format, date) {
+        var year = ['0000', date.getFullYear()].join('').slice(-4);
+        var month = ['0000', date.getMonth()+1].join('').slice(-2);
+        var day = ['0000', date.getDate()].join('').slice(-2);
+        var hour = ['00', date.getHours()].join('').slice(-2);
+        var minute = ['00', date.getMinutes()].join('').slice(-2);
+        var seconds = ['00', date.getSeconds()].join('').slice(-2);
+        return format
+            .replace(/YYYY/g, year)
+            .replace(/MM/g, month)
+            .replace(/DD/g, day)
+            .replace(/hh/g, hour)
+            .replace(/mm/g, minute)
+            .replace(/ss/g, seconds);
+    }
 
     function parseBlackList(callback) {
         $.ajax({
@@ -516,7 +569,7 @@ function main() {
                 var users = map($('div[data-type="users"] div.usercard a span', data), getTrimmedText).map(trim).filter(Boolean).filter(onlyUnique, {});
                 var tags = map($('div[data-type="hashtags"] .tagcard', data), getTrimmedText);
                 var domains = map($('div[data-type="domains"] span.tag', data), getTrimmedText);
-                callback({
+                onNextFrame(callback, {
                     users:   users || [],
                     tags:    tags || [],
                     domains: domains || []
@@ -569,6 +622,80 @@ function main() {
                 onNextFrame(callback, data);
             });
         }
+    }
+
+    function getModerated(callback) {
+        var lock = new Lock('moderated');
+        callback = callback || Function.prototype;
+        if (lock.check()) {
+            lock.aquire(3);
+        } else {
+            retry(getModerated, callback);
+            return;
+        }
+        $.ajax({
+            url:      'http://www.wykop.pl/naruszenia/moderated/',
+            dataType: 'html',
+            success:  function (data) {
+                data = $(data);
+                var reports = $('#violationsList tbody tr', data);
+                var entries = [].map.call(reports, function(row,i) {
+                    var $row = $(row);
+                    var url = $row.find('.author a time').parents('a').attr('href');
+                    var moderationDate = $($row.find('td')[1]).find('time').attr('datetime');
+                    var reason = $($row.find('td')[1]).find('p').text().trim();
+                    return {
+                        moderationDate: new Date(moderationDate),
+                        url: url,
+                        reason: reason
+                    };
+                });
+                callback(entries);
+            }
+        });
+    }
+
+    function getReports(callback) {
+        var lock = new Lock('reports');
+        callback = callback || Function.prototype;
+        if (lock.check()) {
+            lock.aquire(3);
+        } else {
+            retry(getReports, callback);
+            return;
+        }
+        $.ajax({
+            url:      'http://www.wykop.pl/naruszenia/moje/',
+            dataType: 'html',
+            success:  function (data) {
+                data = $(data);
+                var reports = $('#violationsList tbody tr', data);
+                var entries = [];
+                [].forEach.call(reports, function(row,i) {
+                    var $row = $(row);
+                    var stateHtml = $row.children().first().html();
+                    var solvedState = stateHtml.match('waiting') ? null : (stateHtml.match('accepted') ? true : false);
+                    // Ugly, to be fixed later
+                    var reportID = $row.children()[2].textContent.split('\n').map(trim).join('').slice(0,5).trim().replace(':','');
+                    var reason = $($row.children()[2]).find('span').text().trim();
+                    var solvedDate = solvedState === null ? null : new Date($($row.children()[3]).find('time').attr('datetime'));
+                    var firstSeen;
+                    localStorage['black_list/report/'+reportID] = localStorage['black_list/report/'+reportID] || new Date();
+                    firstSeen = new Date(localStorage['black_list/report/'+reportID]);
+                    entries.push({
+                        solved: solvedState,
+                        reportID: reportID,
+                        reason: shortenedReasons[reason] || reason,
+                        solvedDate: solvedDate,
+                        firstSeen: firstSeen,
+                        i: i
+                    });
+                });
+                callback(entries);
+            }
+        });
+
+
     }
 
     function removeVoteGray(subtree) {
@@ -770,7 +897,7 @@ function main() {
         } else if (blockButtonStyle === 'ikona kłódki') {
             onNextFrame(function () {
                 if (that.checked) {
-                    $label.html('<i class="fa fa-unlock" /> ('+document.querySelectorAll('.ginden_black_list').length+')');
+                    $label.html('<i class="fa fa-unlock" /> (' + document.querySelectorAll('.ginden_black_list').length + ')');
                 } else {
                     $label.html('<i class="fa fa-lock" />');
                 }
@@ -783,12 +910,40 @@ function main() {
     $input.prop('checked', !!settings.ENHANCED_BLACK_LIST);
     setSwitch.call($input[0]);
     var style = document.createElement('style');
-    style.innerHTML = ['body.black_list_on .ginden_black_list {display: none; }',
-                       '#black_list_toggle {display: none}',
-                       '#black_list_toggle_cont {padding: 10px;}',
-                       ''
-    ].join('\n');
+    var styleHTML;
 
+    var baseStyleHTML = function(){/*
+
+     body.black_list_on .ginden_black_list {display: none; }
+     #black_list_toggle {display: none}
+     #black_list_toggle_cont {
+     padding: 10px;
+     }
+
+     #reports li {
+     vertical-align: middle;
+     padding-top: 0.1em;
+     padding-bottom: 0.1em;
+     }
+
+     #reports li:nth-child(2n+1) {
+     background-color: rgba(220,220,220,0.2);
+     }
+
+     #reports .report-state-icon {
+     font-size: 1.2em;
+     display: inline-block;
+     width: 1em;
+
+     }
+
+
+     */}.toString();
+
+
+    styleHTML = baseStyleHTML.slice(baseStyleHTML.indexOf('/*')+2, baseStyleHTML.lastIndexOf('*/'));
+
+    style.innerHTML =   styleHTML;
     var $blackListToggleCont = $('<li id="black_list_toggle_cont">').append($input, $label);
 
     document.head.appendChild(style);
@@ -815,40 +970,102 @@ function main() {
     }
 
     if (window.wykop && window.wykop.params) {
-        if (wykop.params.action === 'mywykop') {
+        var wykopParams = window.wykop.params;
+        if (wykopParams.action === 'mywykop') {
             $('.bspace ul').last().append($blackListToggleCont);
             getBlackList(removeEntries);
-        } else if (wykop.params.action === 'tag') {
+            if (settings.SHOW_REPORT_BOXES) {
+                var $block = $('<div class="r-block">' +
+                               '<h4>Zgłoszenia</h4>' +
+                               '<div id="reports" class="objectsList" style="max-height: 30em; overflow-y: auto; padding-top: 4px;"><ul></ul>' +
+                               '</div>');
+                var $ul = $block.find('ul');
+                getReports(function (reports) {
+                    reports.forEach(function (el) {
+                        var $li = $('<li class="report-li"></li>');
+
+                        var elements = [];
+                        var icon = el.solved === null ? '⌛' : (el.solved ? '✔' : '✘');
+                        var $icon = $('<span class="report-state-icon report-solved-state-' + el.solved + '"></span>').text(icon);
+                        elements.push($icon);
+                        elements.push(' ');
+                        elements.push($('<span class="report-id"></span>').text(el.reportID));
+                        elements.push(' (', $('<span class="report-reason"></span>').text(el.reason), ')');
+                        if (el.solved !== null) {
+                            elements.push('; zamknięto: ');
+                            elements.push(
+                                $('<time></time>')
+                                    .text(timeAgo(el.solvedDate))
+                                    .attr('title', formatDate('YYYY-MM-DD hh:mm:ss', new Date(el.solvedDate)))
+                            );
+                            elements.push(' temu; zgłoszono: przynajmniej ');
+                            var firstSeenDisplay = Math.min(el.firstSeen, el.solvedDate);
+                            elements.push(
+                                $('<time></time>')
+                                    .text(timeAgo(firstSeenDisplay))
+                                    .attr('title', formatDate('YYYY-MM-DD hh:mm:ss', new Date(firstSeenDisplay)))
+                            );
+                        }
+
+                        $li.append.apply($li, elements);
+                        $ul.append($li);
+                    });
+                    getModerated(function (moderated) {
+                        moderated.forEach(function (el) {
+                            var $li = $('<li class="report-li"></li>');
+                            var elements = [];
+                            var icon = '❗';
+                            var $icon = $('<span class="report-state-icon moderated-item"></span>').text(icon);
+                            elements.push($icon);
+                            elements.push(' wymoderowano ', $('<a></a>').attr('href', el.url).text('twoją treść'), ' z powodu "'+el.reason+'" (');
+                            elements.push(
+                                $('<time></time>')
+                                    .text(timeAgo(el.moderationDate))
+                                    .attr('title', formatDate('YYYY-MM-DD hh:mm:ss', new Date(el.moderationDate)))
+                            );
+                            elements.push(')');
+
+                            $li.append.apply($li, elements);
+                            $ul.prepend($li);
+                        });
+                    });
+                });
+                $('#tagsConf').parent().before($block)
+
+            }
+
+
+        } else if (wykopParams.action === 'tag') {
             getBlackList(removeEntries);
             $('.fix-b-border > ul').last().append(
                 $blackListToggleCont
             );
-        } else if (wykop.params.action === "profile") {
+        } else if (wykopParams.action === "profile") {
             $blackListToggleCont = $('<span id="black_list_toggle_cont">').append($input, $label);
             $('h4.space').last().append(
                 $blackListToggleCont
             );
             getBlackList(removeEntries);
-        } else if (wykop.params.action === 'stream' && (wykop.params.method === 'index' || wykop.params.method === 'hot')) {
+        } else if (wykopParams.action === 'stream' && (wykopParams.method === 'index' || wykopParams.method === 'hot')) {
             $('.bspace ul').last().append($blackListToggleCont);
             getBlackList(removeEntries);
-        } else if (settings.BLACK_LIST_SORT && wykop.params.action === "settings" && wykop.params.method === "blacklists") {
+        } else if (settings.BLACK_LIST_SORT && wykopParams.action === "settings" && wykopParams.method === "blacklists") {
             var entriesContainer = document.querySelector('div.space[data-type="users"]');
             sortBlackListEntries(entriesContainer);
 
-        } else if (settings.REPORT_DELETED_ACCOUNTS && wykop.params.action === 'error' && wykop.params.method === '404' && location.pathname.match(/\/ludzie\/.*\//)) {
+        } else if (settings.REPORT_DELETED_ACCOUNTS && wykopParams.action === 'error' && wykopParams.method === '404' && location.pathname.match(/\/ludzie\/.*\//)) {
             var user = (location.pathname.match(/\/ludzie\/(.*)\//) || [])[1];
             $('h4.bspace + p > a.button').after(
                 $('<span class="dC" data-type="profile" data-id="' + user + '" />').append(
                     $('<a class="btnNotify button"><i class="fa fa-flag"></i></a>')
                 )
             );
-        } else if (wykop.params.action === "settings" && wykop.params.method === "index") {
+        } else if (wykopParams.action === "settings" && wykopParams.method === "index") {
             var $fieldset = $('<fieldset />');
             var $settings = $('<div class="space" />');
             var $header = $('<h4 />').text('Czarnolistuj Mój Wypok');
             $fieldset.append($header, $settings);
-            pluginSettings.forEach(function (setting) {
+            pluginSettings.forEach(function createSettings(setting) {
                 if (setting.debug && !isSuperUser()) {
                     return;
                 }
@@ -859,8 +1076,7 @@ function main() {
                 var $label = $('<span />').text('invalid setting:' + JSON.stringify(setting, null, 1));
                 var $extra = [];
                 if (setting.type === 'boolean') {
-                    $input = $('<input />');
-                    $input
+                    $input = $('<input />')
                         .addClass('chk-box')
                         .attr('type', 'checkbox')
                         .attr('id', id)
@@ -868,8 +1084,7 @@ function main() {
                         .change(function () {
                             settings[setting.slug] = this.checked;
                         });
-                    $label = $('<label />');
-                    $label
+                    $label = $('<label />')
                         .addClass('inline')
                         .attr('for', id)
                         .attr('title', setting.description || '')
@@ -877,8 +1092,7 @@ function main() {
                 } else if (setting.type === 'open_list') {
                     var $list = $('<ul />');
                     $input = $('<input id="cancer_user_input" type="text" />');
-                    $label = $('<label />').text(setting.description);
-                    $label.attr('for', 'cancer_user_input');
+                    $label = $('<label />').text(setting.description).attr('for', 'cancer_user_input');
                     $input.on('keypress keydown keyup', function (e) {
                         if (e.keyCode == ENTER_KEY_CODE) {
                             e.stopPropagation();
@@ -896,9 +1110,9 @@ function main() {
                     $input = $('<button class="submit">').text(setting.name).attr('title', setting.description).click(setting.click);
                     $label = $();
                 } else if (setting.type === 'select') {
-                    $input = $('<select class="margin5_0" />');
-                    $input
-                        .attr('id', id);
+                    $input = $('<select class="margin5_0" />').attr('id', id).on('change', function () {
+                        settings[setting.slug] = $(this).val();
+                    });
                     $input.append.apply($input, setting.values.map(function (val) {
                         var ret = $('<option />').text(val).val(val);
                         if (val === settings[setting.slug]) {
@@ -906,11 +1120,8 @@ function main() {
                         }
                         return ret;
                     }));
-                    $input.on('change', function () {
-                        settings[setting.slug] = $(this).val();
-                    });
-                    $label = $('<label />');
-                    $label
+
+                    $label = $('<label />')
                         .addClass('inline')
                         .attr('for', id)
                         .attr('title', setting.description || '')
@@ -996,8 +1207,10 @@ function main() {
 
         if (!localStorage[trackingKey] && !settings.ALLOW_TRACKING && (localStorage['black_list/ALLOW_TRACKING'] + '') === 'undefined') {
 
-            var val = confirm('Czy zgadzasz się na zbieranie danych o Twoim systemie, przeglądarce, używanych ustawieniach, rozmiarach czarnej listy?\ ' +
-                              'Możesz to w każdej chwili zmienić w ustawieniach.');
+            var val = confirm('Czy zgadzasz się na zbieranie danych o Twoim systemie,' +
+                              'przeglądarce, używanych ustawieniach, rozmiarach czarnej listy?\ ' +
+                              'Możesz to w każdej chwili zmienić w ustawieniach.' +
+                              'Zbierane dane możesz też podejrzeć tamże.');
             settings.ALLOW_TRACKING = !!val;
         }
         if (settings.ALLOW_TRACKING) {
@@ -1032,7 +1245,7 @@ function main() {
 
 
 var script = document.createElement("script");
-var scriptVersion = typeof GM_info !== 'undefined' ? GM_info.script.version : '4.3';
+var scriptVersion = typeof GM_info !== 'undefined' ? GM_info.script.version : '5.5';
 
 script.textContent = "try { (" + main.toString().replace('###', scriptVersion) + ")(); } catch(e) {console.error(e); throw e;}";
 document.body.appendChild(script);
