@@ -109,7 +109,7 @@ function main() {
             return localStorage[this.slug];
         },
         set: function (val) {
-            if (val == undefined) {
+            if (val == null) {
                 delete localStorage[this.slug];
             } else {
                 localStorage[this.slug] = val;
@@ -290,6 +290,17 @@ function main() {
             type:         'select',
             defaultValue: 'ikona kłódki',
             values:       ['tekst', 'ikona kłódki']
+        },
+        {
+            name:          'Styl podświetlenia plusujących',
+            description:   'Zmienia styl podświetlenia plusujących',
+            slug:          'PLUS_HILIGHT_STYLE',
+            type:          'select',
+            defaultValue:  'kolor',
+            values:       ['kolor', 'ikonka '+String.fromCharCode(10026), 'pogrubienie'],
+            disabled:     function(settings) {
+                return !settings.HILIGHT_PLUS;
+            }
         },
         {
             name:         'Częstość odświeżania cache',
@@ -1142,10 +1153,35 @@ function main() {
         }
 
         if (settings.HILIGHT_PLUS && document.querySelector('div[data-type="entry"]')) {
-            var boundRemoveVoteGray = removeVoteGray.bind(null, document.querySelector('#itemsStream'));
-            var mutationObserver = new MutationObserver(boundRemoveVoteGray);
-            mutationObserver.observe(document.body, {childList: true, subtree: true});
-            removeVoteGray(document.body);
+            var hilightStyle = settings.PLUS_HILIGHT_STYLE;
+            if(hilightStyle === 'kolor') {
+                var boundRemoveVoteGray = removeVoteGray.bind(null, document.querySelector('#itemsStream'));
+                var mutationObserver = new MutationObserver(boundRemoveVoteGray);
+                mutationObserver.observe(document.body, {childList: true, subtree: true});
+                removeVoteGray(document.body);
+            } else if (hilightStyle === 'pogrubienie' || hilightStyle.indexOf('ikonka') === 0) {
+                console.log('AAA');
+                getWhiteList(function(data){
+                    var isIcon = hilightStyle.indexOf('ikonka ') === 0;
+                    var icon = hilightStyle.slice('ikonka '.length);
+                    var users = data.users;
+                    var css = users.map(function(user){
+                        return '.voters-list a.link[href="http://www.wykop.pl/ludzie/'+user+'/"]'+(isIcon ? ':before' : '');
+                    }).join(',\n') + '{ \n'
+                    if (hilightStyle === 'pogrubienie') {
+                        css += 'font-weight: bold;'
+                    } else if (isIcon) {
+                        css += 'content: "'+icon+' ";';
+                    }
+                    css += '\n}';
+                    console.log(css);
+                    var style = document.createElement('style');
+                    style.innerHTML = css;
+                    document.querySelector('head').appendChild(style);
+                });
+            } else {
+                console.log('wow');
+            }
         }
         if (settings.HILIGHT_VOTES && wykop.params.action === 'link' && document.querySelector('#votesContainer')) {
             var mutationObserver = new MutationObserver(highlightDigs.bind(null, document.querySelector('#votesContainer')));
