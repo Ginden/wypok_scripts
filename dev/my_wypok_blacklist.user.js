@@ -10,7 +10,7 @@
 // @include     http://www.wykop.pl/mikroblog/*
 // @include     http://www.wykop.pl/wpis/*
 // @include     http://www.wykop.pl/link/*
-// @version     5.6.1
+// @version     5.7.0
 // @grant       GM_info
 // @downloadURL https://ginden.github.io/wypok_scripts/dev/my_wypok_blacklist.user.js
 // @license     MIT
@@ -175,9 +175,9 @@ function main() {
 
         getBlackList(function (blackData) {
             getWhiteList(function (whiteData) {
-                table['Zablokowane nsfw'] = blackData.tags.indexOf('#nsfw') !== -1;
-                table['Zablokowany islam'] = blackData.tags.indexOf('#islam') !== -1;
-                table['Zablokowany randomanimeshit'] = blackData.tags.indexOf('#randomanimeshit') !== -1;
+                table['Zablokowane **nsfw**'] = blackData.tags.indexOf('#nsfw') !== -1;
+                table['Zablokowany **islam**'] = blackData.tags.indexOf('#islam') !== -1;
+                table['Zablokowany **randomanimeshit**'] = blackData.tags.indexOf('#randomanimeshit') !== -1;
 
                 table['Liczba osób na czarnej liście'] = blackData.users.length;
                 table['Liczba tagów na czarnej liście'] = blackData.tags.length;
