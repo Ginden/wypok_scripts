@@ -10,7 +10,7 @@
 // @include     http://www.wykop.pl/mikroblog/*
 // @include     http://www.wykop.pl/wpis/*
 // @include     http://www.wykop.pl/link/*
-// @version     5.7.0
+// @version     5.7.1
 // @grant       GM_info
 // @downloadURL https://ginden.github.io/wypok_scripts/dev/my_wypok_blacklist.user.js
 // @license     MIT
@@ -33,8 +33,11 @@ function main() {
     function isSuperUser() {
         return +localStorage.debug || location.hash === '#debug' || sessionStorage.debug;
     }
+
     if (isSuperUser()) {
-        window.onerror = function(e){ console.log({Error: e, stack: e.stack}); };
+        window.onerror = function (e) {
+            console.log({Error: e, stack: e.stack});
+        };
     }
     var onNextFrame = (function () {
         var queue = [];
@@ -72,10 +75,11 @@ function main() {
 
     var shortenedReasons = {
         'Propagowanie nienawiści lub przemocy, treści drastyczne': 'nienawiść, przemoc',
-        'To jest multikonto': 'multikonto',
-        'Treści o charakterze pornograficznym': 'porno',
-        'Atakuje mnie lub narusza moje dobra osobiste': 'atakuje mnie',
-        'Nieprawidłowe tagi': 'tagi'
+        'To jest multikonto':                                      'multikonto',
+        'Treści o charakterze pornograficznym':                    'porno',
+        'Atakuje mnie lub narusza moje dobra osobiste':            'atakuje mnie',
+        'Nieprawidłowe tagi':                                      'tagi',
+        'Atakuje inne osoby':                                      'atakuje innych'
     };
 
     function getTimeBasedUniqueString() {
@@ -128,7 +132,6 @@ function main() {
             'Język':                                 navigator.language,
             'Czas':                                  formatDate('YYYY-MM-DD hh:mm:ss', new Date()),
             'Tryb nocny':                            !!(wykop.params.settings.night_mode),
-            'Zablokowana polityka':                  !(wykop.params.settings.show_politics),
             'Pozwala zablokowanym pisać':            wykop.params.settings.allow_blacklisted,
             'Dostaje powiadomienia z czarnej listy': wykop.params.settings.blacklist_notifications
         };
@@ -178,7 +181,7 @@ function main() {
                 table['Zablokowane **nsfw**'] = blackData.tags.indexOf('#nsfw') !== -1;
                 table['Zablokowany **islam**'] = blackData.tags.indexOf('#islam') !== -1;
                 table['Zablokowany **randomanimeshit**'] = blackData.tags.indexOf('#randomanimeshit') !== -1;
-
+                table['Zablokowana **polityka**'] = !(wykop.params.settings.show_politics);
                 table['Liczba osób na czarnej liście'] = blackData.users.length;
                 table['Liczba tagów na czarnej liście'] = blackData.tags.length;
                 table['Liczba domen na czarnej liście'] = blackData.domains.length;
@@ -203,14 +206,15 @@ function main() {
     }
 
     var colorSortOrder = {
-        1002: 100, //konto usunięte
-        1001: 90, // konto zbanowane
-        2001: 80, // sponosorwane
-        5:    80, // admin
-        2:    70, //bordo
-        1:    60, // pomarańcza
-        0:    50,
-        null: 0
+        1002:        100, // konto usunięte
+        1001:        90, //  konto zbanowane
+        2001:        80, //  sponosorwane
+        5:           80, //  admin
+        2:           70, //  bordo
+        1:           60, //  pomarańcza
+        0:           50,
+        'null':      0,
+        'undefined': 0
     };
 
     var pluginSettings = [
@@ -292,13 +296,13 @@ function main() {
             values:       ['tekst', 'ikona kłódki']
         },
         {
-            name:          'Styl podświetlenia plusujących',
-            description:   'Zmienia styl podświetlenia plusujących',
-            slug:          'PLUS_HILIGHT_STYLE',
-            type:          'select',
-            defaultValue:  'kolor',
-            values:       ['kolor', 'ikonka '+String.fromCharCode(10026), 'pogrubienie'],
-            disabled:     function(settings) {
+            name:         'Styl podświetlenia plusujących',
+            description:  'Zmienia styl podświetlenia plusujących',
+            slug:         'PLUS_HILIGHT_STYLE',
+            type:         'select',
+            defaultValue: 'kolor',
+            values:       ['kolor', 'ikonka ' + String.fromCharCode(10026), 'pogrubienie'],
+            disabled:     function (settings) {
                 return !settings.HILIGHT_PLUS;
             }
         },
@@ -331,7 +335,9 @@ function main() {
             description: 'Czyści listę usuniętych wpisów',
             slug:        'CLEAR_HIDDEN_ENTRIES',
             type:        'button',
-            click:       clearHiddenEntries
+            click:       function () {
+                return clearHiddenEntries(alert)
+            }
         },
         {
             name:        'Wyczyść cache',
@@ -384,20 +390,19 @@ function main() {
     function timeAgo(timeInPast, timeNow) {
         timeInPast = new Date(timeInPast);
         timeNow = timeNow ? new Date(timeNow) : new Date();
-        var timeDiff = Math.floor((timeNow - timeInPast)/1000);
+        var timeDiff = Math.floor((timeNow - timeInPast) / 1000);
         if (timeDiff < 60) {
             return timeDiff + ' sek.';
-        } else if (timeDiff < 60*60) {
-            return Math.floor(timeDiff/60)+' min.';
-        } else if (timeDiff < 24*60*60) {
-            return Math.floor(timeDiff/(60*60)) +' godz.';
-        } else if (timeDiff < 30*24*60*60) {
-            return Math.floor(timeDiff/(24*60*60)) +' dni';
+        } else if (timeDiff < 60 * 60) {
+            return Math.floor(timeDiff / 60) + ' min.';
+        } else if (timeDiff < 24 * 60 * 60) {
+            return Math.floor(timeDiff / (60 * 60)) + ' godz.';
+        } else if (timeDiff < 30 * 24 * 60 * 60) {
+            return Math.floor(timeDiff / (24 * 60 * 60)) + ' dni';
         } else {
-            return Math.floor(timeDiff/(30*24*60*60)) +' mies.';
+            return Math.floor(timeDiff / (30 * 24 * 60 * 60)) + ' mies.';
         }
     }
-
 
 
     var getUserColorFromClass = (function () {
@@ -421,7 +426,7 @@ function main() {
 
     function highlightDigs(subtree) {
         getWhiteList(function (data) {
-            var users = new Set(data.users);
+            var users = data.usersSet;
             forEach(subtree.querySelectorAll('.usercard a'), function (el) {
                 if (users.has(el.getAttribute('title'))) {
                     $(el.parentNode).addClass(HIGHLIGHT_CLASS);
@@ -431,7 +436,7 @@ function main() {
     }
 
     function highlightComments(data) {
-        var users = new Set(data.users);
+        var users = data.usersSet;
         var comments = document.querySelectorAll('div[data-type=comment]');
         var cancerUsers = new Set(settings.CANCER_USERS); // lista cancerów
 
@@ -458,7 +463,6 @@ function main() {
             .filter(Boolean).filter(function (el) {
                 return el !== nick;
             });
-        console.log('Removed user ' + nick);
         onNextFrame(listCancerUsers);
         e.preventDefault();
         return false;
@@ -467,11 +471,11 @@ function main() {
     function listCancerUsers($list, setting) {
         $list.html('');
         settings[setting.slug].filter(Boolean).forEach(function (cancerUser) {
-            var $row = $('<li />').append(
-                $('<span />').append(
-                    $('<i class="fa fa-times" />')
+            var $row = $('<li ></li>').append(
+                $('<span ></span>').append(
+                    $('<i class="fa fa-times" ></i>')
                 ).click(removeUserFromCancerList),
-                $('<a />').text(cancerUser).attr('href', 'http://wykop.pl/ludzie/' + cancerUser + '/')
+                $('<a ></a>').text(cancerUser).attr('href', 'http://wykop.pl/ludzie/' + cancerUser + '/')
             );
             $list.append($row);
         });
@@ -557,7 +561,7 @@ function main() {
 
     function formatDate(format, date) {
         var year = ['0000', date.getFullYear()].join('').slice(-4);
-        var month = ['0000', date.getMonth()+1].join('').slice(-2);
+        var month = ['0000', date.getMonth() + 1].join('').slice(-2);
         var day = ['0000', date.getDate()].join('').slice(-2);
         var hour = ['00', date.getHours()].join('').slice(-2);
         var minute = ['00', date.getMinutes()].join('').slice(-2);
@@ -604,14 +608,51 @@ function main() {
         });
     }
 
+    function BlackList(init) {
+        if (!this) {
+            return new BlackList(init);
+        }
+        this.users = init.users;
+        this.tags = init.tags;
+        this.domains = init.domains;
+        this.entries = localStorage['black_list/entries'] ? JSON.parse(localStorage['black_list/entries']) : [];
+        this.usersSet = new Set(init.users);
+        this.tagsSet = new Set(init.tags);
+        return this;
+    }
+
+    BlackList.prototype.toJSON = function () {
+        return {
+            users:   this.users,
+            tags:    this.tags,
+            domains: this.domains
+        };
+    };
+
+    function WhiteList(init) {
+        if (!this) {
+            return new WhiteList(init);
+        }
+        this.users = init.users;
+        this.tags = init.tags;
+        this.usersSet = new Set(init.users);
+        this.tagsSet = new Set(init.tags);
+        return this;
+    }
+
+    BlackList.prototype.toJSON = function () {
+        return {
+            users: this.users,
+            tags:  this.tags
+        };
+    };
 
     function getBlackList(callback) {
         var lock = new Lock('black list');
         callback = callback || Function.prototype;
         if (localStorage['black_list/date/' + getTimeBasedUniqueString()]) {
             var data = JSON.parse(localStorage['black_list/date/' + getTimeBasedUniqueString()]);
-            data.entries = localStorage['black_list/entries'] ? JSON.parse(localStorage['black_list/entries']) : [];
-            onNextFrame(callback, data);
+            onNextFrame(callback, new BlackList(data));
         }
         else {
             if (lock.check()) {
@@ -623,14 +664,9 @@ function main() {
 
             parseBlackList(function (data) {
                 lock.release();
-                Object.keys(localStorage).forEach(function (el) {
-                    if (el.indexOf('black_list/date/') === 0) {
-                        delete localStorage[el];
-                    }
-                });
-                data.entries = localStorage['black_list/entries'] ? JSON.parse(localStorage['black_list/entries']) : [];
+                flushBlackListCache(noop);
                 localStorage['black_list/date/' + getTimeBasedUniqueString()] = JSON.stringify(data);
-                onNextFrame(callback, data);
+                onNextFrame(callback, new BlackList(data));
             });
         }
     }
@@ -650,15 +686,15 @@ function main() {
             success:  function (data) {
                 data = $(data);
                 var reports = $('#violationsList tbody tr', data);
-                var entries = [].map.call(reports, function(row,i) {
+                var entries = [].map.call(reports, function (row, i) {
                     var $row = $(row);
                     var url = $row.find('.author a time').parents('a').attr('href');
                     var moderationDate = $($row.find('td')[1]).find('time').attr('datetime');
                     var reason = $($row.find('td')[1]).find('p').text().trim();
                     return {
                         moderationDate: new Date(moderationDate),
-                        url: url,
-                        reason: reason
+                        url:            url,
+                        reason:         reason
                     };
                 });
                 callback(entries);
@@ -682,24 +718,24 @@ function main() {
                 data = $(data);
                 var reports = $('#violationsList tbody tr', data);
                 var entries = [];
-                [].forEach.call(reports, function(row,i) {
+                [].forEach.call(reports, function (row, i) {
                     var $row = $(row);
                     var stateHtml = $row.children().first().html();
                     var solvedState = stateHtml.match('waiting') ? null : (stateHtml.match('accepted') ? true : false);
                     // Ugly, to be fixed later
-                    var reportID = $row.children()[2].textContent.split('\n').map(trim).join('').slice(0,5).trim().replace(':','');
+                    var reportID = $row.children()[2].textContent.split('\n').map(trim).join('').slice(0, 5).trim().replace(':', '');
                     var reason = $($row.children()[2]).find('span').text().trim();
                     var solvedDate = solvedState === null ? null : new Date($($row.children()[3]).find('time').attr('datetime'));
                     var firstSeen;
-                    localStorage['black_list/report/'+reportID] = localStorage['black_list/report/'+reportID] || new Date();
-                    firstSeen = new Date(localStorage['black_list/report/'+reportID]);
+                    localStorage['black_list/report/' + reportID] = localStorage['black_list/report/' + reportID] || new Date();
+                    firstSeen = new Date(localStorage['black_list/report/' + reportID]);
                     entries.push({
-                        solved: solvedState,
-                        reportID: reportID,
-                        reason: shortenedReasons[reason] || reason,
+                        solved:     solvedState,
+                        reportID:   reportID,
+                        reason:     shortenedReasons[reason] || reason,
                         solvedDate: solvedDate,
-                        firstSeen: firstSeen,
-                        i: i
+                        firstSeen:  firstSeen,
+                        i:          i
                     });
                 });
                 callback(entries);
@@ -711,7 +747,7 @@ function main() {
 
     function removeVoteGray(subtree) {
         getWhiteList(function (data) {
-            var users = new Set(data.users);
+            var users = data.usersSet;
             forEach($(subtree).find('.voters-list a.gray'), function (voter) {
                 var voterNick = getTrimmedText(voter);
                 if (users.has(voterNick)) {
@@ -751,7 +787,7 @@ function main() {
         callback = callback || Function.prototype;
         if (localStorage['white_list/date/' + getTimeBasedUniqueString()]) {
             var data = JSON.parse(localStorage['white_list/date/' + getTimeBasedUniqueString()]);
-            onNextFrame(callback, data);
+            onNextFrame(callback, new WhiteList(data));
         }
         else {
             if (lock.check()) {
@@ -763,15 +799,16 @@ function main() {
             parseWhiteList(function (data) {
                 flushWhiteListCache(noop);
                 localStorage['white_list/date/' + getTimeBasedUniqueString()] = JSON.stringify(data);
-                onNextFrame(callback, data);
+                onNextFrame(callback, new WhiteList(data));
             });
         }
     }
 
-    function clearHiddenEntries() {
+    function clearHiddenEntries(cb) {
+        cb = typeof cb === 'function' ? cb : noop;
         var p = JSON.parse(localStorage['black_list/entries'] || '[]').length;
         localStorage['black_list/entries'] = '[]';
-        alert('Usunięto ' + p + ' ukrytych wpisów z bazy');
+        onNextFrame(cb, 'Usunięto ' + p + ' ukrytych wpisów z bazy');
         return false;
     }
 
@@ -832,8 +869,8 @@ function main() {
         forEach(document.querySelectorAll('#itemsStream .entry div[data-type="entry"]'), function (el) {
             var id = Number(el.getAttribute('data-id'));
             var $menu = $(el).find('ul.responsive-menu');
-            var $li = $('<li />');
-            var $a = $('<a />')
+            var $li = $('<li ></li>');
+            var $a = $('<a ></a>')
                 .addClass('affect hide black-list-entry-hide-switch')
                 .attr('data-id', id)
                 .attr('href', '#')
@@ -894,7 +931,7 @@ function main() {
     });
 
     var $input = $('<input type="checkbox" id="black_list_toggle" name="black_list_toggle" />');
-    var $label = $('<label for="black_list_toggle" />');
+    var $label = $('<label for="black_list_toggle" ></label>');
     var blockButtonStyle = settings.BLOCK_BUTTON_STYLE;
 
     function setSwitch() {
@@ -908,9 +945,9 @@ function main() {
         } else if (blockButtonStyle === 'ikona kłódki') {
             onNextFrame(function () {
                 if (that.checked) {
-                    $label.html('<i class="fa fa-unlock" /> (' + document.querySelectorAll('.ginden_black_list').length + ')');
+                    $label.html('<i class="fa fa-unlock" ></i> (' + document.querySelectorAll('.ginden_black_list').length + ')');
                 } else {
-                    $label.html('<i class="fa fa-lock" />');
+                    $label.html('<i class="fa fa-lock" ></i>');
                 }
             });
         }
@@ -921,9 +958,7 @@ function main() {
     $input.prop('checked', !!settings.ENHANCED_BLACK_LIST);
     setSwitch.call($input[0]);
     var style = document.createElement('style');
-    var styleHTML;
-
-    var baseStyleHTML = function(){/*
+    var baseStyleHTML = function () {/*
 
      body.black_list_on .ginden_black_list {display: none; }
      #black_list_toggle {display: none}
@@ -949,19 +984,18 @@ function main() {
      }
 
 
-     */}.toString();
-
-
-    styleHTML = baseStyleHTML.slice(baseStyleHTML.indexOf('/*')+2, baseStyleHTML.lastIndexOf('*/'));
-
-    style.innerHTML =   styleHTML;
+     */
+    }.toString();
+    style.innerHTML = baseStyleHTML.slice(baseStyleHTML.indexOf('/*') + 2, baseStyleHTML.lastIndexOf('*/'));
+    document.head.appendChild(style);
     var $blackListToggleCont = $('<li id="black_list_toggle_cont">').append($input, $label);
 
-    document.head.appendChild(style);
 
     if (window.wykop) {
         window.wykop.plugins = window.wykop.plugins || {};
         window.wykop.plugins.Ginden = window.wykop.plugins.Ginden || {};
+        window.wykop.plugins.Ginden.bus = window.wykop.plugins.Ginden.bus || {};
+        window.wykop.plugins.Ginden.bus.onNextFrame = onNextFrame;
         window.wykop.plugins.Ginden.MojWykopBlackList = {
             setSwitch:           function (state) {
                 $input.prop('checked', !!state);
@@ -976,7 +1010,9 @@ function main() {
             getTrackingData:     getTrackingData,
             trackingKey:         trackingKey,
             settings:            settings,
-            _lines:              ['//empty line'].concat(main.toString().split('\n'))
+                                 get __lines__() {
+                                     return ['//empty line'].concat(main.toString().split('\n'));
+                                 }
         };
     }
 
@@ -1028,7 +1064,7 @@ function main() {
                             var icon = '❗';
                             var $icon = $('<span class="report-state-icon moderated-item"></span>').text(icon);
                             elements.push($icon);
-                            elements.push(' wymoderowano ', $('<a></a>').attr('href', el.url).text('twoją treść'), ' z powodu "'+el.reason+'" (');
+                            elements.push(' wymoderowano ', $('<a></a>').attr('href', el.url).text('twoją treść'), ' z powodu "' + el.reason + '" (');
                             elements.push(
                                 $('<time></time>')
                                     .text(timeAgo(el.moderationDate))
@@ -1072,19 +1108,19 @@ function main() {
                 )
             );
         } else if (wykopParams.action === "settings" && wykopParams.method === "index") {
-            var $fieldset = $('<fieldset />');
-            var $settings = $('<div class="space" />');
-            var $header = $('<h4 />').text('Czarnolistuj Mój Wypok');
+            var $fieldset = $('<fieldset ></fieldset>');
+            var $settings = $('<div class="space" ></div>');
+            var $header = $('<h4 ></h4>').text('Czarnolistuj Mój Wypok');
             $fieldset.append($header, $settings);
             pluginSettings.forEach(function createSettings(setting) {
                 if (setting.debug && !isSuperUser()) {
                     return;
                 }
-                var $settingContainer = $('<div class="row" />');
-                var $p = $('<p/>');
+                var $settingContainer = $('<div class="row" ></div>');
+                var $p = $('<p></p>');
                 var id = 'my_wykop_black_list_' + setting.slug;
-                var $input = $('<span />').text('invalid setting:' + JSON.stringify(setting, null, 1));
-                var $label = $('<span />').text('invalid setting:' + JSON.stringify(setting, null, 1));
+                var $input = $('<span ></span>').text('invalid setting:' + JSON.stringify(setting, null, 1));
+                var $label = $('<span ></span>').text('invalid setting:' + JSON.stringify(setting, null, 1));
                 var $extra = [];
                 if (setting.type === 'boolean') {
                     $input = $('<input />')
@@ -1095,15 +1131,15 @@ function main() {
                         .change(function () {
                             settings[setting.slug] = this.checked;
                         });
-                    $label = $('<label />')
+                    $label = $('<label ></label>')
                         .addClass('inline')
                         .attr('for', id)
                         .attr('title', setting.description || '')
                         .text(setting.name);
                 } else if (setting.type === 'open_list') {
-                    var $list = $('<ul />');
+                    var $list = $('<ul ></ul>');
                     $input = $('<input id="cancer_user_input" type="text" />');
-                    $label = $('<label />').text(setting.description).attr('for', 'cancer_user_input');
+                    $label = $('<label ></label>').text(setting.description).attr('for', 'cancer_user_input');
                     $input.on('keypress keydown keyup', function (e) {
                         if (e.keyCode == ENTER_KEY_CODE) {
                             e.stopPropagation();
@@ -1121,18 +1157,18 @@ function main() {
                     $input = $('<button class="submit">').text(setting.name).attr('title', setting.description).click(setting.click);
                     $label = $();
                 } else if (setting.type === 'select') {
-                    $input = $('<select class="margin5_0" />').attr('id', id).on('change', function () {
+                    $input = $('<select class="margin5_0" ></select>').attr('id', id).on('change', function () {
                         settings[setting.slug] = $(this).val();
                     });
                     $input.append.apply($input, setting.values.map(function (val) {
-                        var ret = $('<option />').text(val).val(val);
+                        var ret = $('<option ></option>').text(val).val(val);
                         if (val === settings[setting.slug]) {
                             ret.attr('selected', 'selected');
                         }
                         return ret;
                     }));
 
-                    $label = $('<label />')
+                    $label = $('<label ></label>')
                         .addClass('inline')
                         .attr('for', id)
                         .attr('title', setting.description || '')
@@ -1154,24 +1190,24 @@ function main() {
 
         if (settings.HILIGHT_PLUS && document.querySelector('div[data-type="entry"]')) {
             var hilightStyle = settings.PLUS_HILIGHT_STYLE;
-            if(hilightStyle === 'kolor') {
+            if (hilightStyle === 'kolor') {
                 var boundRemoveVoteGray = removeVoteGray.bind(null, document.querySelector('#itemsStream'));
                 var mutationObserver = new MutationObserver(boundRemoveVoteGray);
                 mutationObserver.observe(document.body, {childList: true, subtree: true});
                 removeVoteGray(document.body);
             } else if (hilightStyle === 'pogrubienie' || hilightStyle.indexOf('ikonka') === 0) {
                 console.log('AAA');
-                getWhiteList(function(data){
+                getWhiteList(function (data) {
                     var isIcon = hilightStyle.indexOf('ikonka ') === 0;
                     var icon = hilightStyle.slice('ikonka '.length);
                     var users = data.users;
-                    var css = users.map(function(user){
-                        return '.voters-list a.link[href="http://www.wykop.pl/ludzie/'+user+'/"]'+(isIcon ? ':before' : '');
-                    }).join(',\n') + '{ \n'
+                    var css = users.map(function (user) {
+                            return '.voters-list a.link[href="http://www.wykop.pl/ludzie/' + user + '/"]' + (isIcon ? ':before' : '');
+                        }).join(',\n') + '{ \n';
                     if (hilightStyle === 'pogrubienie') {
                         css += 'font-weight: bold;'
                     } else if (isIcon) {
-                        css += 'content: "'+icon+' ";';
+                        css += 'content: "' + icon + ' ";';
                     }
                     css += '\n}';
                     console.log(css);
@@ -1270,7 +1306,7 @@ function main() {
                 getTrackingData(function (message) {
                     if (!localStorage[trackingKey]) {
                         commentEntry(message, entryId);
-                        localStorage[trackingKey] = Date();
+                        localStorage[trackingKey] = formatDate('YYYY-MM', new Date());
                     }
                 });
             }
@@ -1281,7 +1317,7 @@ function main() {
 
 
 var script = document.createElement("script");
-var scriptVersion = typeof GM_info !== 'undefined' ? GM_info.script.version : '5.5';
+var scriptVersion = typeof GM_info !== 'undefined' ? GM_info.script.version : '5.7';
 
-script.textContent = "try { (" + main.toString().replace('###', scriptVersion) + ")(); } catch(e) {console.error(e); throw e;}";
+script.textContent = "try { (" + main.toString().replace('###', scriptVersion) + ")(); } catch(e) {console.error({Error: e, stack: e.stack}); throw e;}";
 document.body.appendChild(script);
