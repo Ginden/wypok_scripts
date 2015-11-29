@@ -10,7 +10,7 @@
 // @include     http://www.wykop.pl/mikroblog/*
 // @include     http://www.wykop.pl/wpis/*
 // @include     http://www.wykop.pl/link/*
-// @version     5.7.1
+// @version     5.8.1
 // @grant       GM_info
 // @downloadURL https://ginden.github.io/wypok_scripts/dev/my_wypok_blacklist.user.js
 // @license     MIT
@@ -27,7 +27,7 @@ function main() {
     "use strict";
     var $ = window.jQuery || window.$;
     var currentScriptVersion = '###';
-    var trackingKey = 'black_list/tracking_' + currentScriptVersion + '_' + (new Date()).getMonth() + '_' + (new Date()).getFullYear();
+    var trackingKey = 'black_list/tracking_' + currentScriptVersion + '_' + formatDate('YYYY-MM', new Date());
     var hash = '';
 
     function isSuperUser() {
@@ -42,7 +42,7 @@ function main() {
     var onNextFrame = (function () {
         var queue = [];
         var running = false;
-        return function onNextFrameInternal(func) {
+        function onNextFrameInternal(func) {
             var args = [].slice.call(arguments, 1);
             queue.push({
                 func: func,
@@ -71,6 +71,7 @@ function main() {
                 requestAnimationFrame(process);
             }
         }
+        return onNextFrameInternal;
     }());
 
     var shortenedReasons = {
@@ -85,7 +86,7 @@ function main() {
     function getTimeBasedUniqueString() {
         var base = (new Date()).toLocaleDateString();
         var everyHours = +(/\d*/.exec(settings.CACHE_REFRESH_TIME)); // wyciąga cyfry, wspieramy tylko liczby godzin.
-        return base + '-' + everyHours + '-' + Math.floor((new Date).getHours() / everyHours); // 0 zostaje
+        return currentScriptVersion+'-'+base + '-' + everyHours + '-' + Math.floor((new Date).getHours() / everyHours); // 0 zostaje
                                                                                                // potraktowane jak 24h,
                                                                                                //  25 i więcej też
     }
@@ -124,7 +125,7 @@ function main() {
 
     function getTrackingData(cb) {
         cb = cb || alert.bind(window);
-        var message = ['@Ginden'];
+        var message = ['@Ginden:', getTrimmedText($('.logged-user a.ellipsis'))];
         var table = {
             'Wersja skryptu':                        currentScriptVersion,
             'OS/CPU':                                navigator.oscpu || 'undefined',
@@ -133,7 +134,8 @@ function main() {
             'Czas':                                  formatDate('YYYY-MM-DD hh:mm:ss', new Date()),
             'Tryb nocny':                            !!(wykop.params.settings.night_mode),
             'Pozwala zablokowanym pisać':            wykop.params.settings.allow_blacklisted,
-            'Dostaje powiadomienia z czarnej listy': wykop.params.settings.blacklist_notifications
+            'Dostaje powiadomienia z czarnej listy': wykop.params.settings.blacklist_notifications,
+            'Liczba zmian ustawień':                 localStorage['black_list/settings_changes'] | 0
         };
         var features = {
             Set:                   'return new Set();',
@@ -149,13 +151,14 @@ function main() {
             Reflect:               'return typeof Reflect !== "undefined"',
             Symbol:                'return typeof Symbol !== "undefined"',
             'Symbol.iterator':     'return typeof Symbol.iterator !== "undefined"',
-            'rest arguments':      'return function(...a){return a;};'
-
+            'rest arguments':      'return function(...a){return a;};',
+            'crypto':              'return window.crypto',
+            'crypto.subtle':       'return window.crypto.subtle'
         };
         pluginSettings.filter(function (setting) {
             return setting.type !== 'button';
         }).forEach(function (setting) {
-            table[setting.name + ' (' + setting.slug + ')'] = settings[setting.slug] || null;
+            table[setting.name + ' (' + setting.slug + ')'] = settings[setting.slug] === undefined ? null : settings[setting.slug];
         });
         var supportedFeatures = [];
         var unsupportedFeatures = [];
@@ -186,6 +189,7 @@ function main() {
                 table['Liczba tagów na czarnej liście'] = blackData.tags.length;
                 table['Liczba domen na czarnej liście'] = blackData.domains.length;
                 table['Liczba obserwowanych użytkowników'] = whiteData.users.length;
+                table['Liczba obserwowanych tagów'] = whiteData.tags.length;
                 message.push.apply(message, Object.keys(table).map(function (key) {
                     var val = table[key];
                     key = key.replace(/_/g, '\\_');
@@ -222,6 +226,13 @@ function main() {
             name:         'Włącz ulepszoną czarną listę',
             description:  'Włącza podstawową funkcjonalność dodatku',
             slug:         'ENHANCED_BLACK_LIST',
+            type:         'boolean',
+            defaultValue: true
+        },
+        {
+            name:         'Stosuj ulepszoną czarną listę także do znalezisk',
+            description:  'Ukrywa także znaleziska',
+            slug:         'ENHANCED_BLACK_LIST_LINKS',
             type:         'boolean',
             defaultValue: true
         },
@@ -264,7 +275,7 @@ function main() {
             description:  'Podświetlanie komentarzy obserwowanych',
             slug:         'HILIGHT_COMMENTS',
             type:         'boolean',
-            defaultValue: false
+            defaultValue:  false
         },
         {
             name:         'Blokuj przypadkowe usunięcie treści',
@@ -322,9 +333,9 @@ function main() {
             click: function (e) {
                 var json = {};
                 pluginSettings.forEach(function (setting) {
-                    json[setting.slug] = settings[setting.slug] || null;
+                    json[setting.slug] = settings[setting.slug] === undefined ? null : settings[setting.slug];
                 });
-                alert(JSON.stringify(json, null, 2));
+                alert(JSON.stringify(json, null, 1));
                 e.stopPropagation();
                 e.preventDefault();
                 return false;
@@ -384,7 +395,7 @@ function main() {
     var trim = Function.prototype.call.bind(''.trim);
 
     function getTrimmedText(el) {
-        return el.jquery ? el.text().trim() : el.textContent.trim();
+        return typeof el === 'string' ? el.trim() : (el.jquery ? el.text().trim() : el.textContent.trim());
     }
 
     function timeAgo(timeInPast, timeNow) {
@@ -526,6 +537,9 @@ function main() {
     function createSettingSetter(slug) {
         var lsKey = 'black_list/' + slug;
         return function settingSetter(val) {
+            if (slug !== 'ENHANCED_BLACK_LIST') {
+                localStorage['black_list/settings_changes'] = (localStorage['black_list/settings_changes'] | 0)+1;
+            }
             var slugs = this._slugs;
             if (slugs[slug].type === 'open_list') {
                 if (val === undefined) {
@@ -772,10 +786,11 @@ function main() {
             success:  function (data) {
                 data = $(data);
                 var users = map($('#observedUsers a span', data), getTrimmedText).filter(Boolean).filter(onlyUnique, {});
-                var tags = [];
+                var tags = map($('#observedUsers .tag a', data), getTrimmedText).filter(Boolean).filter(onlyUnique, {});
+
                 callback({
                     users: users || [],
-                    tags:  tags || [] // TBA
+                    tags:  tags || []
                 });
             }
         });
@@ -866,6 +881,27 @@ function main() {
                 return false;
             }
         }).toggleClass('ginden_black_list', true);
+        if(settings.ENHANCED_BLACK_LIST_LINKS) {
+            var links = $('#itemsStream .link').filter(function (i, el) {
+                var $el = $(el);
+                var author = $('div[data-type="link"] .fix-tagline a', $el).first().text().trim().slice(1);
+                var tags = map($('div[data-type="link"] .fix-tagline .tag.affect.create', $el), function (el) {
+                    return [].map.call(el.children, getTrimmedText).join('');
+                });
+                var isBlockedAuthor = blockedUsers.has(author);
+                var blockedTag;
+                if (isBlockedAuthor) {
+                    $el.attr('data-black-list-reason', author);
+                    return true;
+                } else if (blockedTag = find(tags, blockedTags.has.bind(blockedTags))) {
+                    $el.attr('data-black-list-reason', '#' + blockedTag);
+                    return true;
+                } else {
+                    return false;
+                }
+            }).toggleClass('ginden_black_list', true);
+        }
+
         forEach(document.querySelectorAll('#itemsStream .entry div[data-type="entry"]'), function (el) {
             var id = Number(el.getAttribute('data-id'));
             var $menu = $(el).find('ul.responsive-menu');
@@ -1240,6 +1276,7 @@ function main() {
                 }
 
                 if ([].some.call(document.querySelectorAll('textarea'), isModified)) {
+                    if (el.name === "profile[note]") return false;
                     e.returnValue = 'yeah';
                     return 'Are you sure';
                 }
@@ -1251,6 +1288,7 @@ function main() {
             };
             $(document.body).on("click focus select", "textarea", handleEvent);
             [].forEach.call(document.querySelectorAll('textarea'), function (el) {
+                if (el.name === "profile[note]") return;
                 handleEvent.call(el);
             });
         }
@@ -1277,17 +1315,22 @@ function main() {
             $label.addClass('button');
         }
 
-        if (!localStorage[trackingKey] && !settings.ALLOW_TRACKING && (localStorage['black_list/ALLOW_TRACKING'] + '') === 'undefined') {
-
-            var val = confirm('Czy zgadzasz się na zbieranie danych o Twoim systemie,' +
+        if (!localStorage[trackingKey] && (localStorage['black_list/ALLOW_TRACKING'] + '') === 'undefined') {
+            localStorage['black_list/tracking-wait'] = localStorage['black_list/tracking-wait'] || formatDate('YYYY-MM-DD', new Date());
+            // Wait at least one day before asking for permission
+            if(localStorage['black_list/tracking-wait'] !== formatDate('YYYY-MM-DD', new Date())) {
+                var val = confirm('Czy zgadzasz się na zbieranie danych o Twoim systemie,' +
                               'przeglądarce, używanych ustawieniach, rozmiarach czarnej listy?\ ' +
                               'Możesz to w każdej chwili zmienić w ustawieniach.' +
                               'Zbierane dane możesz też podejrzeć tamże.');
-            settings.ALLOW_TRACKING = !!val;
+                settings.ALLOW_TRACKING = !!val;
+            }
+            
         }
         if (settings.ALLOW_TRACKING) {
 
             if (!localStorage[trackingKey]) {
+                
                 var entryId = 14431827;
                 var commentEntry = function commentEntry(message, entryId) {
                     return $.ajax({
@@ -1299,16 +1342,16 @@ function main() {
                             'body':    message
                         },
                         success: function () {
-
+                            localStorage[trackingKey] = formatDate('YYYY-MM', new Date());
                         }
                     });
                 };
                 getTrackingData(function (message) {
                     if (!localStorage[trackingKey]) {
                         commentEntry(message, entryId);
-                        localStorage[trackingKey] = formatDate('YYYY-MM', new Date());
                     }
                 });
+
             }
         }
     }
@@ -1317,7 +1360,7 @@ function main() {
 
 
 var script = document.createElement("script");
-var scriptVersion = typeof GM_info !== 'undefined' ? GM_info.script.version : '5.7';
+var scriptVersion = typeof GM_info !== 'undefined' ? GM_info.script.version : '5.8';
 
 script.textContent = "try { (" + main.toString().replace('###', scriptVersion) + ")(); } catch(e) {console.error({Error: e, stack: e.stack}); throw e;}";
 document.body.appendChild(script);
