@@ -10,7 +10,7 @@
 // @include     http://www.wykop.pl/mikroblog/*
 // @include     http://www.wykop.pl/wpis/*
 // @include     http://www.wykop.pl/link/*
-// @version     5.8.1
+// @version     5.8.4
 // @grant       GM_info
 // @downloadURL https://ginden.github.io/wypok_scripts/dev/my_wypok_blacklist.user.js
 // @license     MIT
@@ -138,22 +138,17 @@ function main() {
             'Liczba zmian ustawień':                 localStorage['black_list/settings_changes'] | 0
         };
         var features = {
-            Set:                   'return new Set();',
-            Map:                   'return new Map()',
-            WeakMap:               'return new WeakMap();',
-            WeakSet:               'return new WeakSet();',
             Promise:               'return new Promise(function(){});',
             'basic destructuring': 'var {a,b} = {a: 1, b:1}',
             'let':                 'let a = 3; return a;',
             'backquote':           'return `wow`;',
-            'arrow-functions':     'return a=>(a+1);',
-            'generators':          'return function*(){yield 3;}',
             Reflect:               'return typeof Reflect !== "undefined"',
             Symbol:                'return typeof Symbol !== "undefined"',
             'Symbol.iterator':     'return typeof Symbol.iterator !== "undefined"',
             'rest arguments':      'return function(...a){return a;};',
-            'crypto':              'return window.crypto',
-            'crypto.subtle':       'return window.crypto.subtle'
+            'Proxy':               'return typeof Proxy === "function"',
+            'crypto':              'return crypto',
+            'crypto.subtle':       'return crypto.subtle'
         };
         pluginSettings.filter(function (setting) {
             return setting.type !== 'button';
@@ -829,10 +824,14 @@ function main() {
 
     function sortBlackListEntries(entriesContainer) {
         var childs = slice(entriesContainer.children);
+        var banned = 0;
         childs.map(function (el) {
             el.nick = getTrimmedText(el).toLowerCase();
             var aColor = el.querySelector('span[class*=color]') || null;
             var rawColor = (aColor && aColor.getAttribute('class').slice('color-'.length)) | 0;
+            if (rawColor === 1002 || rawColor === 1001) {
+                banned++;
+            }
             el.color = colorSortOrder[rawColor] | 0;
             el.prevColor = (localStorage['black_list/user/' + el.nick + '/color'] || el.color) | 0;
             el.prioritize = 0;
@@ -844,6 +843,9 @@ function main() {
         }).sort(sortUsersList).forEach(function (el) {
             entriesContainer.appendChild(el);
         });
+        $(entriesContainer).prepend(
+            $('<h2></h2>').text('Zbanowanych: '+banned+'/'+childs.length+' ('+(100*banned/childs.length).toPrecision(2)+'%)')
+        );
     }
 
     function find(arr, func, thisArg) {
@@ -886,7 +888,7 @@ function main() {
                 var $el = $(el);
                 var author = $('div[data-type="link"] .fix-tagline a', $el).first().text().trim().slice(1);
                 var tags = map($('div[data-type="link"] .fix-tagline .tag.affect.create', $el), function (el) {
-                    return [].map.call(el.children, getTrimmedText).join('');
+                    return [].map.call(el.childNodes, getTrimmedText).join('');
                 });
                 var isBlockedAuthor = blockedUsers.has(author);
                 var blockedTag;
@@ -900,6 +902,7 @@ function main() {
                     return false;
                 }
             }).toggleClass('ginden_black_list', true);
+            console.warn.apply(console, [].slice.call(links));
         }
 
         forEach(document.querySelectorAll('#itemsStream .entry div[data-type="entry"]'), function (el) {
@@ -1018,6 +1021,9 @@ function main() {
      width: 1em;
 
      }
+     .icomoon {
+        font-family: icomoon;
+     }
 
 
      */
@@ -1081,15 +1087,9 @@ function main() {
                                     .text(timeAgo(el.solvedDate))
                                     .attr('title', formatDate('YYYY-MM-DD hh:mm:ss', new Date(el.solvedDate)))
                             );
-                            elements.push(' temu; zgłoszono: przynajmniej ');
-                            var firstSeenDisplay = Math.min(el.firstSeen, el.solvedDate);
-                            elements.push(
-                                $('<time></time>')
-                                    .text(timeAgo(firstSeenDisplay))
-                                    .attr('title', formatDate('YYYY-MM-DD hh:mm:ss', new Date(firstSeenDisplay)))
-                            );
+                            elements.push(' temu; ')
+                            elements.push('głoszono: przynajmniej ');
                         }
-
                         $li.append.apply($li, elements);
                         $ul.append($li);
                     });
@@ -1132,10 +1132,9 @@ function main() {
         } else if (wykopParams.action === 'stream' && (wykopParams.method === 'index' || wykopParams.method === 'hot')) {
             $('.bspace ul').last().append($blackListToggleCont);
             getBlackList(removeEntries);
-        } else if (settings.BLACK_LIST_SORT && wykopParams.action === "settings" && wykopParams.method === "blacklists") {
+        } else if (wykopParams.action === "settings" && wykopParams.method === "blacklists" && settings.BLACK_LIST_SORT) {
             var entriesContainer = document.querySelector('div.space[data-type="users"]');
             sortBlackListEntries(entriesContainer);
-
         } else if (settings.REPORT_DELETED_ACCOUNTS && wykopParams.action === 'error' && wykopParams.method === '404' && location.pathname.match(/\/ludzie\/.*\//)) {
             var user = (location.pathname.match(/\/ludzie\/(.*)\//) || [])[1];
             $('h4.bspace + p > a.button').after(
@@ -1331,7 +1330,7 @@ function main() {
 
             if (!localStorage[trackingKey]) {
                 
-                var entryId = 14431827;
+                var entryId = 15434191;
                 var commentEntry = function commentEntry(message, entryId) {
                     return $.ajax({
                         url:     'http://www.wykop.pl/ajax2/wpis/CommentAdd/' +
@@ -1342,12 +1341,13 @@ function main() {
                             'body':    message
                         },
                         success: function () {
-                            localStorage[trackingKey] = formatDate('YYYY-MM', new Date());
+                            
                         }
                     });
                 };
                 getTrackingData(function (message) {
                     if (!localStorage[trackingKey]) {
+                        localStorage[trackingKey] = formatDate('YYYY-MM', new Date());
                         commentEntry(message, entryId);
                     }
                 });
