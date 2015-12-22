@@ -10,7 +10,7 @@
 // @include     http://www.wykop.pl/mikroblog/*
 // @include     http://www.wykop.pl/wpis/*
 // @include     http://www.wykop.pl/link/*
-// @version     5.12.0
+// @version     5.12.3
 // @grant       GM_info
 // @downloadURL https://ginden.github.io/wypok_scripts/dev/my_wypok_blacklist.user.js
 // @license     MIT
@@ -103,7 +103,6 @@ function main() {
         this.dumpPending = false;
         localStorage['black_list/storage/' + this.name] = JSON.stringify(this._storage);
         this._storage = null;
-        console.log('Dumping Storage:' + this.name);
     };
 
     SmartStorage.prototype.clear = function () {
@@ -146,12 +145,18 @@ function main() {
         var running = false;
 
         function onNextFrameInternal(func) {
+            if (typeof func !== 'function') {
+                console.log(func);
+                alert('Wciśnij F12, rozwiń to co możesz, zrób screena i wyślij użytkownikowi Ginden - wystąpił dziwny błąd. \n'+(new Error).stack);
+                throw new TypeError('Not a function ('+typeof func+'):\n'+func);
+            }
             var args = slice(arguments, 1);
             queue.push({
                 func: func,
                 args: args,
                 this: this
             });
+
             if (running === false) {
                 running = true;
                 requestAnimationFrame(process);
@@ -392,9 +397,7 @@ function main() {
         function escape(text) {
             return document.createElement('div').appendChild(document.createTextNode(text)).parentNode.innerHTML.replace(/"/g, '&quot;');
         }
-        var j = 0;
         return code.replace(/!\{([a-z#\.\-]*)}/gi, function templater(group, value) {
-            console.log(code, value, arguments, j++);
             var path = value.split('.');
             var curr = values;
             var doEscape = false;
@@ -1118,7 +1121,6 @@ function main() {
                         date:       formatDate('YYYY-MM-DD hh:mm:ss', new Date(el.moderationDate)),
                         'time-ago': timeAgo(el.moderationDate)
                     });
-                    console.log(el, html);
                     var $li = $(html);
                     $ul.prepend($li);
                 });
@@ -1629,7 +1631,7 @@ function main() {
         }
         if (settings.HILIGHT_ENTRY_COMMENTS && document.querySelector('div[data-type="entry"]')) {
             var mutationObserver = new MutationObserver(highlightEntryComments);
-            mutationObserver.observe(document.querySelector('body'), {childList: true, subtree: true});
+            mutationObserver.observe(document.body, {childList: true, subtree: true});
             highlightEntryComments();
         }
         if (settings.PREVENT_ACCIDENTAL_REMOVE && typeof WeakMap === 'function') {
@@ -1716,7 +1718,6 @@ function main() {
 
     Object.keys(localStorage).forEach(function (key) {
         if (key.match(/^black_list\/(user|report)/)) {
-            console.log(key, localStorage[key]);
             delete localStorage[key];
         }
     });
