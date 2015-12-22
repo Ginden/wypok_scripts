@@ -10,7 +10,7 @@
 // @include     http://www.wykop.pl/mikroblog/*
 // @include     http://www.wykop.pl/wpis/*
 // @include     http://www.wykop.pl/link/*
-// @version     5.12.3
+// @version     5.12.4
 // @grant       GM_info
 // @downloadURL https://ginden.github.io/wypok_scripts/dev/my_wypok_blacklist.user.js
 // @license     MIT
@@ -151,11 +151,12 @@ function main() {
                 throw new TypeError('Not a function ('+typeof func+'):\n'+func);
             }
             var args = slice(arguments, 1);
-            queue.push({
+            var p = {
                 func: func,
                 args: args,
                 this: this
-            });
+            };
+            queue.push(p);
 
             if (running === false) {
                 running = true;
@@ -178,6 +179,7 @@ function main() {
                 } catch (e) {
                     SharedTimer.end(func);
                     setTimeout(function () {
+                        console.error({el:el, e:e});
                         throw e;
                     }, 0);
                     break;
@@ -607,8 +609,7 @@ function main() {
     }
 
     function retry(func) {
-        var args = slice(arguments, 1);
-        onNextFrame(func.bind(this, args));
+        onNextFrame.apply(this, slice(arguments));
     }
 
     function BlackList(init) {
@@ -771,7 +772,15 @@ function main() {
         });
     }
 
+    function assertIsFunction(fn) {
+        if (typeof fn === 'function') return
+        console.log(fn, (new Error()).stack);
+        throw new TypeError({}.toString.call(fn) +' is not a function');
+    }
+
+
     function parseWhiteList(callback) {
+        assertIsFunction(callback);
         $.ajax({
             url:      'http://www.wykop.pl/moj/',
             dataType: 'html',
@@ -790,11 +799,12 @@ function main() {
 
     function getWhiteList(callback) {
         var lock = new Lock('white list');
-
+        assertIsFunction(callback);
         callback = callback || Function.prototype;
         if (localStorage['white_list/date/' + getTimeBasedUniqueString(settings.CACHE_REFRESH_TIME)]) {
             var data = JSON.parse(localStorage['white_list/date/' + getTimeBasedUniqueString(settings.CACHE_REFRESH_TIME)]);
-            onNextFrame(callback, new WhiteList(data));
+            var whiteList = new WhiteList(data);
+            onNextFrame(callback, whiteList);
         }
         else {
             if (lock.check()) {
@@ -1593,10 +1603,11 @@ function main() {
         if (settings.HILIGHT_PLUS && document.querySelector('div[data-type="entry"]')) {
             var hilightStyle = settings.PLUS_HILIGHT_STYLE;
             if (hilightStyle === TEXT.HILIGHT_COLOR) {
-                var boundRemoveVoteGray = removeVoteGray.bind(null, document.querySelector('#itemsStream'));
+                var element = document.querySelector('#itemsStream') || document.body;
+                var boundRemoveVoteGray = removeVoteGray.bind(null, element);
                 var mutationObserver = new MutationObserver(boundRemoveVoteGray);
-                mutationObserver.observe(document.body, {childList: true, subtree: true});
-                removeVoteGray(document.body);
+                mutationObserver.observe(element, {childList: true, attributes: false, subtree: true});
+                onNextFrame(removeVoteGray, element);
             } else if (hilightStyle === TEXT.HILIGHT_BOLD || hilightStyle.indexOf('ikonka') === 0) {
                 // We add CSS style so we have to do it only once
                 getWhiteList(function hilightPluses(data) {
@@ -1612,7 +1623,6 @@ function main() {
                         css += 'content: "' + icon + ' ";';
                     }
                     css += '\n}';
-                    console.log(css);
                     var style = document.createElement('style');
                     style.innerHTML = css;
                     document.querySelector('head').appendChild(style);
