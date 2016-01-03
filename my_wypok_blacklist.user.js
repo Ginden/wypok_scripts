@@ -10,7 +10,7 @@
 // @include     http://www.wykop.pl/mikroblog/*
 // @include     http://www.wykop.pl/wpis/*
 // @include     http://www.wykop.pl/link/*
-// @version     6.0.0
+// @version     6.0.1
 // @grant       GM_info
 // @downloadURL https://ginden.github.io/wypok_scripts/my_wypok_blacklist.user.js
 // @license     MIT
@@ -1163,7 +1163,7 @@ function main() {
             document.body.appendChild(a);
             setTimeout(function () {
                 a.click();
-                D.body.removeChild(a);
+                document.body.removeChild(a);
                 setTimeout(function () {
                     URL.revokeObjectURL(url);
                 }, 1500);
@@ -1859,7 +1859,7 @@ function main() {
 
 
 var script = document.createElement("script");
-var scriptVersion = typeof GM_info !== 'undefined' ? GM_info.script.version : '5.12';
+var scriptVersion = typeof GM_info !== 'undefined' ? GM_info.script.version : '6.0';
 
 script.textContent = "try { (" + main.toString().replace('###', scriptVersion) + ")(); } catch(e) {console.error({Error: e, stack: e.stack}); throw e;}";
 document.body.appendChild(script);
