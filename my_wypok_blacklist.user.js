@@ -10,7 +10,7 @@
 // @include     http://www.wykop.pl/mikroblog/*
 // @include     http://www.wykop.pl/wpis/*
 // @include     http://www.wykop.pl/link/*
-// @version     6.0.1
+// @version     6.0.2
 // @grant       GM_info
 // @downloadURL https://ginden.github.io/wypok_scripts/my_wypok_blacklist.user.js
 // @license     MIT
@@ -1154,7 +1154,7 @@ function main() {
 
     var saveFile = (function () {
         var a = document.createElement("a");
-        a.style = 'display: none';
+        a.setAttribute('style', 'display: none');
         return function (data, mimeType, fileName) {
             var blob = new Blob([data], {type: 'application/octet-stream'}),
                 url = window.URL.createObjectURL(blob);
