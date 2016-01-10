@@ -10,7 +10,7 @@
 // @include     http://www.wykop.pl/mikroblog/*
 // @include     http://www.wykop.pl/wpis/*
 // @include     http://www.wykop.pl/link/*
-// @version     6.0.2
+// @version     6.0.3
 // @grant       GM_info
 // @downloadURL https://ginden.github.io/wypok_scripts/my_wypok_blacklist.user.js
 // @license     MIT
@@ -25,6 +25,32 @@
 
 function main() {
     "use strict";
+
+    if (typeof Object.assign != 'function') {
+        (function () {
+            Object.assign = function (target) {
+                'use strict';
+                if (target === undefined || target === null) {
+                    throw new TypeError('Cannot convert undefined or null to object');
+                }
+
+                var output = Object(target);
+                for (var index = 1; index < arguments.length; index++) {
+                    var source = arguments[index];
+                    if (source !== undefined && source !== null) {
+                        for (var nextKey in source) {
+                            if (source.hasOwnProperty(nextKey)) {
+                                output[nextKey] = source[nextKey];
+                            }
+                        }
+                    }
+                }
+                return output;
+            };
+        })();
+    }
+
+
     var $ = window.jQuery || window.$;
     var currentScriptVersion = '###';
     var hash = '';
