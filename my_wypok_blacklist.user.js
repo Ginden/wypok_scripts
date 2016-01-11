@@ -1,6 +1,6 @@
 // ==UserScript==
-// @name        Czarnolistuj Mój Wykop (dev)
-// @namespace   my_wykop_blacklists_dev
+// @name        Czarnolistuj Mój Wykop
+// @namespace   my_wykop_blacklists
 // @include     http://www.wykop.pl/moj/*
 // @include     http://www.wykop.pl/tag/*
 // @include     http://www.wykop.pl/ustawienia/czarne-listy/*
@@ -10,7 +10,7 @@
 // @include     http://www.wykop.pl/mikroblog/*
 // @include     http://www.wykop.pl/wpis/*
 // @include     http://www.wykop.pl/link/*
-// @version     6.0.3
+// @version     6.0.4
 // @grant       GM_info
 // @downloadURL https://ginden.github.io/wypok_scripts/my_wypok_blacklist.user.js
 // @license     MIT

@@ -10,7 +10,7 @@
 // @include     http://www.wykop.pl/mikroblog/*
 // @include     http://www.wykop.pl/wpis/*
 // @include     http://www.wykop.pl/link/*
-// @version     7.1.2
+// @version     7.2.0
 // @grant       GM_info
 // @downloadURL https://ginden.github.io/wypok_scripts/dev/my_wypok_blacklist.user.js
 // @license     MIT
@@ -79,13 +79,7 @@ function main() {
         if (!this._storage) {
             this.load();
         }
-        try {
-            return Object.prototype.hasOwnProperty.call(this._storage, key) ? this._storage[key] : defaultValue;
-        } catch (e) {
-            console.log(e, this, defaultValue, key);
-            throw e;
-        }
-
+        return Object.prototype.hasOwnProperty.call(this._storage, key) ? this._storage[key] : defaultValue;
     };
     SmartStorage.prototype.set = function set(key, value) {
         if (!this._storage) {
@@ -194,7 +188,6 @@ function main() {
             default:
                 throw new TypeError(String(period) + ' is not valid period');
         }
-
     }
 
     function commentEntry(message, entryId) {
@@ -238,8 +231,8 @@ function main() {
             'Proxy':               'return typeof Proxy === "function"',
             'crypto.subtle':       'return crypto.subtle',
             'Object.assign':       'return typeof Object.assign === "function";',
-            'ServiceWorker':       'return navigator.serviceWorker;',
-            'TextDecoder':         'return new TextDecoder()'
+            'TextDecoder':         'return new TextDecoder()',
+            'class declaration':   'class Polygon {}; return new Polygon();'
         };
         settings.list().forEach(function (setting) {
             var slug = setting.slug;
@@ -253,7 +246,7 @@ function main() {
         Object.keys(features).map(function (feature) {
             var val = false;
             try {
-                val = Function(features[feature])();
+                val = Function('"use strict";\n'+features[feature])();
             } catch (ignore) {
                 val = false;
             }
@@ -313,7 +306,6 @@ function main() {
             if (doEscape) {
                 curr = escape(curr);
             }
-
             return curr;
         });
     }
@@ -375,10 +367,6 @@ function main() {
         }
     }
 
-    function retry(func) {
-        onNextFrame.apply(this, slice(arguments));
-    }
-
     //endregion Helpers
 
     //region Lock
@@ -402,7 +390,7 @@ function main() {
 
     Object.defineProperty(Lock.prototype, 'state', {
         configurable: false,
-        enumarable:   false,
+        enumerable:   false,
         get:          function () {
             return localStorage[this.slug];
         },
@@ -568,7 +556,6 @@ function main() {
                 data = $(data);
                 var users = map($('#observedUsers a span', data), getTrimmedText).filter(Boolean).filter(onlyUnique, {});
                 var tags = map($('#observedUsers .tag a', data), getTrimmedText).filter(Boolean).filter(onlyUnique, {});
-
                 callback({
                     users: users || [],
                     tags:  tags || []
@@ -590,7 +577,7 @@ function main() {
             if (lock.check()) {
                 lock.aquire(3);
             } else {
-                retry(WhiteList.get, callback);
+                onNextFrame(WhiteList.get, callback);
                 return;
             }
             WhiteList.parse(function fillWhiteList(data) {
@@ -636,7 +623,7 @@ function main() {
             if (lock.check()) {
                 lock.aquire(3);
             } else {
-                retry(BlackList.get, callback);
+                onNextFrame(BlackList.get, callback);
                 return;
             }
 
@@ -790,17 +777,17 @@ function main() {
                 return 'Are you sure';
             }
         };
-        var handleEvent = function handleEvent(e) {
+        var saveValue = function saveValue(e) {
             if (firstValues.get(this) === undefined) {
                 firstValues.set(this, this.value);
             }
         };
-        $(document.body).on("click focus select", "textarea", handleEvent);
+        $(document.body).on("click focus select", "textarea", saveValue);
         forEach(document.querySelectorAll('textarea'), function (el) {
             if (el.name === "profile[note]") {
                 return;
             }
-            handleEvent.call(el);
+            saveValue.call(el);
         });
     }
 
@@ -809,30 +796,29 @@ function main() {
         callback = callback || Function.prototype;
         if (lock.check()) {
             lock.aquire(3);
+            $.ajax({
+                url:      'http://www.wykop.pl/naruszenia/moderated/',
+                dataType: 'html',
+                success:  function (data) {
+                    data = $(data);
+                    var reports = $('#violationsList tbody tr', data);
+                    var entries = map(reports, function (row, i) {
+                        var $row = $(row);
+                        var url = $row.find('.author a time').parents('a').attr('href');
+                        var moderationDate = $($row.find('td')[1]).find('time').attr('datetime');
+                        var reason = getTrimmedText($($row.find('td')[1]).find('p'));
+                        return {
+                            moderationDate: new Date(moderationDate),
+                            url:            url,
+                            reason:         reason
+                        };
+                    });
+                    callback(entries);
+                }
+            });
         } else {
-            retry(getModerated, callback);
-            return;
+            onNextFrame(getModerated, callback);
         }
-        $.ajax({
-            url:      'http://www.wykop.pl/naruszenia/moderated/',
-            dataType: 'html',
-            success:  function (data) {
-                data = $(data);
-                var reports = $('#violationsList tbody tr', data);
-                var entries = map(reports, function (row, i) {
-                    var $row = $(row);
-                    var url = $row.find('.author a time').parents('a').attr('href');
-                    var moderationDate = $($row.find('td')[1]).find('time').attr('datetime');
-                    var reason = getTrimmedText($($row.find('td')[1]).find('p'));
-                    return {
-                        moderationDate: new Date(moderationDate),
-                        url:            url,
-                        reason:         reason
-                    };
-                });
-                callback(entries);
-            }
-        });
     }
 
     function getReports(callback) {
@@ -841,7 +827,7 @@ function main() {
         if (lock.check()) {
             lock.aquire(3);
         } else {
-            retry(getReports, callback);
+            onNextFrame(getReports, callback);
             return;
         }
         $.ajax({
@@ -1200,27 +1186,29 @@ function main() {
         var $ul = $block.find('ul');
         getReports(function (reports) {
             reports.forEach(function (el) {
-                var $li = $('<li class="report-li"></li>');
+                var reportLiTemplate = `<li class="report-li">
+                    <span class="report-state-icon report-solved-state-!{solved}">!{icon}</span>
+                    <span class="report-reason">!{reason}</span>
+                    (<span class="report-id">!{id}</span>)`;
 
-                var elements = [];
+
                 var icon = el.solved === null ? '⌛' : (el.solved ? '✔' : '✘');
-                var $icon = $('<span class="report-state-icon report-solved-state-' + el.solved + '"></span>').text(icon);
-                elements.push($icon);
-                elements.push(' ');
-                elements.push($('<span class="report-id"></span>').text(el.reportID));
-                elements.push(' (', $('<span class="report-reason"></span>').text(el.reason), ')');
                 if (el.solved !== null) {
-                    elements.push('; zamknięto: ');
-                    elements.push(
-                        $('<time></time>')
-                            .text(timeAgo(el.solvedDate))
-                            .attr('title', formatDate('YYYY-MM-DD hh:mm:ss', new Date(el.solvedDate)))
-                    );
-                    elements.push(' temu; ');
-                    elements.push('głoszono: przynajmniej ');
+                    reportLiTemplate += '; rozwiązano: <time title="!{solved-date}">!{solved-time-ago} temu</time>';
                 }
-                $li.append.apply($li, elements);
-                $ul.append($li);
+                reportLiTemplate += '; zgłoszono przynajmniej: <time title="!{reported-date}">!{reported-time-ago} temu</time></li>';
+
+                console.log(el);
+                $ul.append($(template(reportLiTemplate, {
+                    solved: String(el.solved),
+                    icon: icon,
+                    reason: el.reason,
+                    'solved-date':  formatDate('YYYY-MM-DD hh:mm:ss', el.solvedDate || new Date()),
+                    'solved-time-ago': timeAgo(el.solvedDate || new Date()),
+                    'reported-date': formatDate('YYYY-MM-DD hh:mm:ss', el.firstSeen),
+                    'reported-time-ago': timeAgo(el.firstSeen),
+                    'id': el.reportID
+                })));
             });
             getModerated(function (moderated) {
                 moderated.forEach(function (el) {
@@ -1243,7 +1231,7 @@ function main() {
         a.setAttribute('style', 'display: none');
         return function (data, mimeType, fileName) {
             var blob = new Blob([data], {type: 'application/octet-stream'}),
-                url  = window.URL.createObjectURL(blob);
+                url  = URL.createObjectURL(blob);
             a.href = url;
             a.download = fileName;
             document.body.appendChild(a);
@@ -1257,8 +1245,35 @@ function main() {
         };
     }());
 
-    function addUserNotesExport() {
+    function addUserNotesExport(context) {
+        var fileName = currentUser + '-user-notes-' + formatDate('YYYY-MM-DD-hh-mm');
         var $notesList = $('ul#notesList');
+        if (context && typeof context === 'object' && !context.BUBBLING_PHASE) {
+            $notesList = $('ul#notesList', context);
+        } else {
+            var lis = $notesList.children('li');
+            WhiteList.get(function(whiteList){
+                forEach(lis, function(li){
+                    var $li = $(li);
+                    if (whiteList.usersSet.has(getTrimmedText($li.find('a b')))) {
+                        $li.addClass(HIGHLIGHT_CLASS);
+                    }
+                });
+            });
+            BlackList.get(function(blackList){
+                forEach(lis, function(li){
+                    var $li = $(li);
+                    if (blackList.usersSet.has(getTrimmedText($li.find('a b')))) {
+                        $li.addClass(BAD_HIGHLIGHT_CLASS);
+                    }
+                });
+            });
+            if (settings.BLACK_LIST_SORT) {
+                parseNotes().sort(sortUsersList).forEach(function(el){
+                    $notesList[0].appendChild(el.domElement);
+                })
+            }
+        }
         var buttons = [
             $('<button class="button">HTML</button>').click(exportToHTML),
             $('<button class="button">JSON</button>').click(exportToJSON),
@@ -1274,13 +1289,16 @@ function main() {
                         return el.nodeType === 3; // TEXT_NODE
                     }).map(function (el) {
                         return el.textContent;
-                    }).join(' ').trim()
+                    }).join(' ').trim(),
+                    domElement: li
                 };
             });
 
         }
 
-        var fileName = currentUser + '-user-notes-' + formatDate('YYYY-MM-DD-hh-mm');
+
+
+
 
         function exportToHTML() {
             var entries = parseNotes().sort(sortUsersList);
@@ -1325,6 +1343,9 @@ function main() {
             $(el).append(' ', $('<i class="fa fa-print"></i>'));
         });
         $notesList.before($('<div></div>').append(buttons));
+        if (context && !context.BUBBLING_PHASE) {
+            return parseNotes();
+        }
     }
 
     //region settings
@@ -1527,7 +1548,6 @@ function main() {
                         json[setting.slug] = settings[setting.slug] === undefined ? null : settings[setting.slug];
                     });
                     alert(JSON.stringify(json, null, 1));
-                    e.stopPropagation();
                     e.preventDefault();
                     return false;
                 }
@@ -1845,9 +1865,7 @@ function main() {
         }
 
         if (settings.ALLOW_TRACKING) {
-            console.log('Tracking allowed')
             if (!UserTracker.wasTrackedThisMonth()) {
-                console.log('Sending data?');
                 UserTracker.sendData();
             }
         } else {
