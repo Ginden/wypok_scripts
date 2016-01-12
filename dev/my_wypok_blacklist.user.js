@@ -10,7 +10,7 @@
 // @include     http://www.wykop.pl/mikroblog/*
 // @include     http://www.wykop.pl/wpis/*
 // @include     http://www.wykop.pl/link/*
-// @version     7.2.0
+// @version     7.2.1
 // @grant       GM_info
 // @downloadURL https://ginden.github.io/wypok_scripts/dev/my_wypok_blacklist.user.js
 // @license     MIT
@@ -344,19 +344,13 @@ function main() {
 
     function formatDate(format, date) {
         date = date === undefined ? new Date() : date;
-        var year = ['0000', date.getFullYear()].join('').slice(-4);
-        var month = ['0000', date.getMonth() + 1].join('').slice(-2);
-        var day = ['0000', date.getDate()].join('').slice(-2);
-        var hour = ['00', date.getHours()].join('').slice(-2);
-        var minute = ['00', date.getMinutes()].join('').slice(-2);
-        var seconds = ['00', date.getSeconds()].join('').slice(-2);
         return format
-            .replace(/YYYY/g, year)
-            .replace(/MM/g, month)
-            .replace(/DD/g, day)
-            .replace(/hh/g, hour)
-            .replace(/mm/g, minute)
-            .replace(/ss/g, seconds);
+            .replace(/YYYY/g, ['0000', date.getFullYear()].join('').slice(-4))
+            .replace(/MM/g, ['0000', date.getMonth() + 1].join('').slice(-2))
+            .replace(/DD/g, ['0000', date.getDate()].join('').slice(-2))
+            .replace(/hh/g, ['00', date.getHours()].join('').slice(-2))
+            .replace(/mm/g, ['00', date.getMinutes()].join('').slice(-2))
+            .replace(/ss/g, ['00', date.getSeconds()].join('').slice(-2));
     }
 
     function sortUsersList(a, b) {
@@ -470,7 +464,6 @@ function main() {
             }
         },
         wasTrackedThisMonth: function () {
-            console.log(this.getTrackingKey(), localStorage[this.getTrackingKey()])
             return localStorage[this.getTrackingKey()];
         },
         getTrackingKey:      function getTrackingKey() {
@@ -550,7 +543,7 @@ function main() {
     WhiteList.parse = function parseWhiteList(callback) {
         assertIsFunction(callback);
         $.ajax({
-            url:      'http://www.wykop.pl/moj/',
+            url:      'http://www.wykop.pl/moj/notatki-o-uzytkownikach/',
             dataType: 'html',
             success:  function (data) {
                 data = $(data);
@@ -846,15 +839,29 @@ function main() {
                     var solvedDate = solvedState === null ? null : new Date($($row.children()[3]).find('time').attr('datetime'));
                     storage.set(reportID, storage.get(reportID, new Date()));
                     var firstSeen = new Date(storage.get(reportID));
+                    if (firstSeen > solvedDate) {
+                        firstSeen = new Date(solvedDate);
+                    }
                     return {
                         solved:     solvedState,
                         reportID:   reportID,
                         reason:     shortenedReasons[reason] || reason.toLowerCase(),
                         solvedDate: solvedDate,
-                        firstSeen:  firstSeen,
-                        i:          i
+                        firstSeen:  firstSeen
                     };
                 });
+                if(entries.length>2) {
+                    entries.reduceRight(function(next, current){
+                        if (current.solvedDate === null && Date.now() - current.firstSeen < 1000) {
+
+                        }
+
+
+
+
+                        return current;
+                    });
+                }
                 onNextFrame(callback, entries);
             }
         });
@@ -1198,7 +1205,6 @@ function main() {
                 }
                 reportLiTemplate += '; zgłoszono przynajmniej: <time title="!{reported-date}">!{reported-time-ago} temu</time></li>';
 
-                console.log(el);
                 $ul.append($(template(reportLiTemplate, {
                     solved: String(el.solved),
                     icon: icon,
