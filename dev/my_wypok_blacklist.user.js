@@ -10,7 +10,7 @@
 // @include     http://www.wykop.pl/mikroblog/*
 // @include     http://www.wykop.pl/wpis/*
 // @include     http://www.wykop.pl/link/*
-// @version     7.4.0
+// @version     7.4.1
 // @grant       GM_info
 // @downloadURL https://ginden.github.io/wypok_scripts/dev/my_wypok_blacklist.user.js
 // @license     MIT
@@ -858,7 +858,7 @@ function main() {
                     var solvedDate = solvedState === null ? null : new Date($($row.children()[3]).find('time').attr('datetime'));
                     storage.set(reportID, storage.get(reportID, new Date()));
                     var firstSeen = new Date(storage.get(reportID));
-                    if (firstSeen > solvedDate) {
+                    if (solvedDate !== null && firstSeen > solvedDate) {
                         firstSeen = new Date(solvedDate);
                     }
                     return {
