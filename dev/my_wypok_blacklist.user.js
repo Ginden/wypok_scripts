@@ -10,7 +10,7 @@
 // @include     http://www.wykop.pl/mikroblog/*
 // @include     http://www.wykop.pl/wpis/*
 // @include     http://www.wykop.pl/link/*
-// @version     7.2.1
+// @version     7.4.0
 // @grant       GM_info
 // @downloadURL https://ginden.github.io/wypok_scripts/dev/my_wypok_blacklist.user.js
 // @license     MIT
@@ -59,9 +59,11 @@ function main() {
     var ENTER_KEY_CODE = 13;
     var HIGHLIGHT_CLASS = 'type-light-warning'; // Słabo widoczne na nocnym, co robić?
     var BAD_HIGHLIGHT_CLASS = 'bad-highlight';
+
     function isSuperUser() {
         return window.debug || console.firebug || +localStorage.debug || location.hash === '#debug' || +sessionStorage.debug;
     }
+
     //region SmartStorage
     function SmartStorage(name, autoDump) {
         if (!this) {
@@ -75,6 +77,7 @@ function main() {
         this._storage = null;
         this.autoDump = autoDump;
     }
+
     SmartStorage.prototype.get = function get(key, defaultValue) {
         if (!this._storage) {
             this.load();
@@ -118,6 +121,7 @@ function main() {
     var onNextFrame = (function () {
         var queue = [];
         var running = false;
+
         function process() {
             var el, func, thisArg, args, endTime = Date.now() + 10;
             do {
@@ -141,6 +145,7 @@ function main() {
             }
             requestAnimationFrame(process);
         }
+
         return function onNextFrameInternal(func) {
             assertIsFunction(func);
             var args = slice(arguments, 1);
@@ -192,12 +197,12 @@ function main() {
 
     function commentEntry(message, entryId) {
         return $.ajax({
-            url:     'http://www.wykop.pl/ajax2/wpis/CommentAdd/' +
-                     entryId + '/hash/' + wykop.params.hash + '/',
-            type:    'POST',
-            data:    {
+            url: 'http://www.wykop.pl/ajax2/wpis/CommentAdd/' +
+            entryId + '/hash/' + wykop.params.hash + '/',
+            type: 'POST',
+            data: {
                 '__token': wykop.params.hash,
-                'body':    message
+                'body': message
             },
             success: function () {
 
@@ -209,30 +214,30 @@ function main() {
         cb = cb || alert.bind(window);
         var message = ['@Ginden:', currentUser];
         var table = {
-            'Wersja skryptu':                        currentScriptVersion,
-            'OS/CPU':                                navigator.oscpu || 'undefined',
-            'Browser':                               navigator.userAgent,
-            'Język':                                 navigator.language,
-            'Czas':                                  formatDate('YYYY-MM-DD hh:mm:ss', new Date()),
-            'Tryb nocny':                            !!(wykop.params.settings.night_mode),
-            'Pozwala zablokowanym pisać':            wykop.params.settings.allow_blacklisted,
+            'Wersja skryptu': currentScriptVersion,
+            'OS/CPU': navigator.oscpu || 'undefined',
+            'Browser': navigator.userAgent,
+            'Język': navigator.language,
+            'Czas': formatDate('YYYY-MM-DD hh:mm:ss', new Date()),
+            'Tryb nocny': !!(wykop.params.settings.night_mode),
+            'Pozwala zablokowanym pisać': wykop.params.settings.allow_blacklisted,
             'Dostaje powiadomienia z czarnej listy': wykop.params.settings.blacklist_notifications,
-            'Liczba zmian ustawień':                 localStorage['black_list/settings_changes'] | 0
+            'Liczba zmian ustawień': localStorage['black_list/settings_changes'] | 0
         };
         var features = {
             'basic destructuring': 'var {a,b} = {a: 1, b:1}',
-            'let':                 'let a = 3; return a;',
-            'const':               'const b = 3; return b;',
-            'backquote':           'return `wow` === "wow";',
-            Reflect:               'return typeof Reflect !== "undefined"',
-            Symbol:                'return typeof Symbol !== "undefined"',
-            'Symbol.iterator':     'return typeof Symbol.iterator !== "undefined"',
-            'rest arguments':      'return function(...a){return a;};',
-            'Proxy':               'return typeof Proxy === "function"',
-            'crypto.subtle':       'return crypto.subtle',
-            'Object.assign':       'return typeof Object.assign === "function";',
-            'TextDecoder':         'return new TextDecoder()',
-            'class declaration':   'class Polygon {}; return new Polygon();'
+            'let': 'let a = 3; return a;',
+            'const': 'const b = 3; return b;',
+            'backquote': 'return `wow` === "wow";',
+            Reflect: 'return typeof Reflect !== "undefined"',
+            Symbol: 'return typeof Symbol !== "undefined"',
+            'Symbol.iterator': 'return typeof Symbol.iterator !== "undefined"',
+            'rest arguments': 'return function(...a){return a;};',
+            'Proxy': 'return typeof Proxy === "function"',
+            'crypto.subtle': 'return crypto.subtle',
+            'Object.assign': 'return typeof Object.assign === "function";',
+            'TextDecoder': 'return new TextDecoder()',
+            'class declaration': 'class Polygon {}; return new Polygon();'
         };
         settings.list().forEach(function (setting) {
             var slug = setting.slug;
@@ -246,7 +251,7 @@ function main() {
         Object.keys(features).map(function (feature) {
             var val = false;
             try {
-                val = Function('"use strict";\n'+features[feature])();
+                val = Function('"use strict";\n' + features[feature])();
             } catch (ignore) {
                 val = false;
             }
@@ -361,6 +366,18 @@ function main() {
         }
     }
 
+    function doXpath(node, path, first) {
+        var iterator = document.evaluate(path, node, null, XPathResult.ANY_TYPE, null);
+        if (first) {
+            return iterator.iterateNext();
+        } else {
+            var ret = [];
+            var el;
+            while (el = iterator.iterateNext()) ret.push(el);
+            return ret;
+        }
+    }
+
     //endregion Helpers
 
     //region Lock
@@ -384,11 +401,11 @@ function main() {
 
     Object.defineProperty(Lock.prototype, 'state', {
         configurable: false,
-        enumerable:   false,
-        get:          function () {
+        enumerable: false,
+        get: function () {
             return localStorage[this.slug];
         },
-        set:          function (val) {
+        set: function (val) {
             if (val == null) {
                 delete localStorage[this.slug];
             } else {
@@ -402,33 +419,33 @@ function main() {
     // Region Texts
     var shortenedReasons = {
         'Propagowanie nienawiści lub przemocy, treści drastyczne': 'nienawiść, przemoc',
-        'To jest multikonto':                                      'multikonto',
-        'Treści o charakterze pornograficznym':                    'porno',
-        'Atakuje mnie lub narusza moje dobra osobiste':            'atakuje mnie',
-        'Nieprawidłowe tagi':                                      'tagi',
-        'Atakuje inne osoby':                                      'atakuje innych',
-        'Naruszenie regulaminu - nieodpowiednie treści':           'nieodpowiednie treści'
+        'To jest multikonto': 'multikonto',
+        'Treści o charakterze pornograficznym': 'porno',
+        'Atakuje mnie lub narusza moje dobra osobiste': 'atakuje mnie',
+        'Nieprawidłowe tagi': 'tagi',
+        'Atakuje inne osoby': 'atakuje innych',
+        'Naruszenie regulaminu - nieodpowiednie treści': 'nieodpowiednie treści'
     };
 
     var TEXT = {
-        SHOW:                       'pokazuj',
-        HIDE:                       'ukryj',
-        HILIGHT_ICON_STAR:          'ikonka ' + String.fromCharCode(10026),
-        HILIGHT_BOLD:               'pogrubienie',
-        HILIGHT_COLOR:              'kolor',
+        SHOW: 'pokazuj',
+        HIDE: 'ukryj',
+        HILIGHT_ICON_STAR: 'ikonka ' + String.fromCharCode(10026),
+        HILIGHT_BOLD: 'pogrubienie',
+        HILIGHT_COLOR: 'kolor',
         HILIGHT_WARNING_BACKGROUND: 'kolor ostrzeżenia',
-        HILIGHT_BORDER_LEFT:        'pasek z boku',
-        HILIGHT_BORDER_RAINBOW:     'tęczowy pasek z boku',
-        BLOCK_TEXT:                 'tekst',
-        BLOCK_ICON:                 'ikona kłódki',
-        TRACKING_AGREE:             'Czy zgadzasz się na zbieranie danych o Twoim systemie,' +
-                                    'przeglądarce, używanych ustawieniach, rozmiarach czarnej listy?\ ' +
-                                    'Możesz to w każdej chwili zmienić w ustawieniach.' +
-                                    'Zbierane dane możesz też podejrzeć tamże.'
+        HILIGHT_BORDER_LEFT: 'pasek z boku',
+        HILIGHT_BORDER_RAINBOW: 'tęczowy pasek z boku',
+        BLOCK_TEXT: 'tekst',
+        BLOCK_ICON: 'ikona kłódki',
+        TRACKING_AGREE: 'Czy zgadzasz się na zbieranie danych o Twoim systemie,' +
+        'przeglądarce, używanych ustawieniach, rozmiarach czarnej listy?\ ' +
+        'Możesz to w każdej chwili zmienić w ustawieniach.' +
+        'Zbierane dane możesz też podejrzeć tamże.'
     };
 
     var TEMPLATES = {
-        MODERATED_LI:  `<li class="report-li">
+        MODERATED_LI: `<li class="report-li">
                         ❗<span class="report-state-icon moderated-item"></span> wymoderowano <a href="!{url}">twoją treść</a> z powodu "!{reason}" (<time title="!{date}">!{time-ago}</time>)
                     </li>`,
         REPORT_BUTTON: `<span class="dC" data-type="profile" data-id="!{user}">
@@ -438,14 +455,14 @@ function main() {
     };
 
     var colorSortOrder = {
-        1002:        100, // konto usunięte
-        1001:        90, //  konto zbanowane
-        2001:        80, //  sponosorwane
-        5:           80, //  admin
-        2:           70, //  bordo
-        1:           60, //  pomarańcza
-        0:           50,
-        'null':      0,
+        1002: 100, // konto usunięte
+        1001: 90, //  konto zbanowane
+        2001: 80, //  sponosorwane
+        5: 80, //  admin
+        2: 70, //  bordo
+        1: 60, //  pomarańcza
+        0: 50,
+        'null': 0,
         'undefined': 0
     };
 
@@ -453,7 +470,7 @@ function main() {
 
     var UserTracker = {
         entryId: 15954301,
-        promptIfNecessary:   function () {
+        promptIfNecessary: function () {
             if (!localStorage[this.getTrackingKey()] && (localStorage['black_list/ALLOW_TRACKING'] + '') === 'undefined') {
                 localStorage['black_list/tracking-wait'] = localStorage['black_list/tracking-wait'] || formatDate('YYYY-MM-DD', new Date());
                 // Wait at least one day before asking for permission
@@ -466,14 +483,14 @@ function main() {
         wasTrackedThisMonth: function () {
             return localStorage[this.getTrackingKey()];
         },
-        getTrackingKey:      function getTrackingKey() {
+        getTrackingKey: function getTrackingKey() {
             return 'black_list/tracking_' + currentScriptVersion + '_' + simplePeriodToSeconds('28d');
         },
         sendData: function () {
             if (!localStorage[this.getTrackingKey()]) {
                 var id = this.entryId;
                 localStorage[this.getTrackingKey()] = formatDate('YYYY-MM', new Date());
-                getTrackingData(function(message){
+                getTrackingData(function (message) {
                     commentEntry(message, id);
                 });
 
@@ -543,15 +560,15 @@ function main() {
     WhiteList.parse = function parseWhiteList(callback) {
         assertIsFunction(callback);
         $.ajax({
-            url:      'http://www.wykop.pl/moj/notatki-o-uzytkownikach/',
+            url: 'http://www.wykop.pl/moj/notatki-o-uzytkownikach/',
             dataType: 'html',
-            success:  function (data) {
+            success: function (data) {
                 data = $(data);
                 var users = map($('#observedUsers a span', data), getTrimmedText).filter(Boolean).filter(onlyUnique, {});
                 var tags = map($('#observedUsers .tag a', data), getTrimmedText).filter(Boolean).filter(onlyUnique, {});
                 callback({
                     users: users || [],
-                    tags:  tags || []
+                    tags: tags || []
                 });
             }
         });
@@ -600,8 +617,8 @@ function main() {
 
     BlackList.prototype.toJSON = function () {
         return {
-            users:   this.users,
-            tags:    this.tags,
+            users: this.users,
+            tags: this.tags,
             domains: this.domains
         };
     };
@@ -630,16 +647,16 @@ function main() {
     };
     BlackList.parse = function parseBlackList(callback) {
         $.ajax({
-            url:      'http://www.wykop.pl/ustawienia/czarne-listy/',
+            url: 'http://www.wykop.pl/ustawienia/czarne-listy/',
             dataType: 'html',
-            success:  function (data) {
+            success: function (data) {
                 data = $(data);
                 var users = map($('div[data-type="users"] div.usercard a span', data), getTrimmedText).filter(Boolean).filter(onlyUnique, {});
                 var tags = map($('div[data-type="hashtags"] .tagcard', data), getTrimmedText);
                 var domains = map($('div[data-type="domains"] span.tag', data), getTrimmedText);
                 onNextFrame(callback, {
-                    users:   users || [],
-                    tags:    tags || [],
+                    users: users || [],
+                    tags: tags || [],
                     domains: domains || []
                 });
             }
@@ -756,6 +773,7 @@ function main() {
 
     function preventAccidentalTabClose() {
         var firstValues = new WeakMap();
+
         function isModified(el) {
             var savedValue = firstValues.get(el);
             if (el.name === "profile[note]" || savedValue === undefined || el.value === '') {
@@ -764,6 +782,7 @@ function main() {
                 return el.value !== savedValue;
             }
         }
+
         window.onbeforeunload = function (e) {
             if ([].some.call(document.querySelectorAll('textarea'), isModified)) {
                 e.returnValue = 'yeah';
@@ -790,9 +809,9 @@ function main() {
         if (lock.check()) {
             lock.aquire(3);
             $.ajax({
-                url:      'http://www.wykop.pl/naruszenia/moderated/',
+                url: 'http://www.wykop.pl/naruszenia/moderated/',
                 dataType: 'html',
-                success:  function (data) {
+                success: function (data) {
                     data = $(data);
                     var reports = $('#violationsList tbody tr', data);
                     var entries = map(reports, function (row, i) {
@@ -802,8 +821,8 @@ function main() {
                         var reason = getTrimmedText($($row.find('td')[1]).find('p'));
                         return {
                             moderationDate: new Date(moderationDate),
-                            url:            url,
-                            reason:         reason
+                            url: url,
+                            reason: reason
                         };
                     });
                     callback(entries);
@@ -824,9 +843,9 @@ function main() {
             return;
         }
         $.ajax({
-            url:      'http://www.wykop.pl/naruszenia/moje/',
+            url: 'http://www.wykop.pl/naruszenia/moje/',
             dataType: 'html',
-            success:  function (data) {
+            success: function (data) {
                 data = $(data);
                 var storage = new SmartStorage('report');
                 var entries = map($('#violationsList tbody tr', data), function (row, i) {
@@ -843,20 +862,18 @@ function main() {
                         firstSeen = new Date(solvedDate);
                     }
                     return {
-                        solved:     solvedState,
-                        reportID:   reportID,
-                        reason:     shortenedReasons[reason] || reason.toLowerCase(),
+                        solved: solvedState,
+                        reportID: reportID,
+                        reason: shortenedReasons[reason] || reason.toLowerCase(),
                         solvedDate: solvedDate,
-                        firstSeen:  firstSeen
+                        firstSeen: firstSeen
                     };
                 });
-                if(entries.length>2) {
-                    entries.reduceRight(function(next, current){
+                if (entries.length > 2) {
+                    entries.reduceRight(function (next, current) {
                         if (current.solvedDate === null && Date.now() - current.firstSeen < 1000) {
 
                         }
-
-
 
 
                         return current;
@@ -887,6 +904,54 @@ function main() {
                 }
             });
         });
+    }
+
+    function hideTacticalComments() {
+        var currentUserCall = ('@' + currentUser).toLowerCase();
+        var tactics = ['taktyk', 'taktyczny', 'strategicznie', 'taktycznie', 'wołaj', 'wolaj', 'wołej', 'wołąj', 'chętnie poczytam'];
+        var maxLength = Math.max.apply(null, tactics.map(function (e) {
+            return e.length;
+        }));
+
+        function markElement(el) {
+            if (el.tagName === 'DIV' && el.getAttribute('data-type') === 'entrycomment') {
+                var textContent = map(el.querySelectorAll('div.text > p'), getTrimmedText).join('\n').toLowerCase();
+                var owner = ('@' + $(el).parents('li.entry').find('.author a b').first().text()).toLowerCase();
+                var q = (owner.length + maxLength + 10);
+                if (textContent.match(new RegExp(currentUserCall)) || textContent.length > q) {
+                    return;
+                }
+                tactics.some(function someStartsWith(text) {
+                    var searchStrings = [
+                        text,
+                        owner + ': ' + text,
+                        owner + ' ' + text,
+                        owner + '  ' + text
+                    ];
+                    if (searchStrings.some(function (text) {
+                            return textContent.startsWith(text);
+                        })) {
+                        el.setAttribute('class', el.getAttribute('class') + ' tactic-entry');
+                        return true;
+                    }
+                });
+            }
+
+        }
+
+        var func = function observerFunc(records) {
+            records.forEach(function (record) {
+                forEach(record.addedNodes, markElement);
+            });
+        };
+        var mutationObserver = new MutationObserver(func);
+        mutationObserver.observe(document.body, {
+            subtree: true,
+            childList: true,
+            attributes: false
+        });
+
+        forEach(document.querySelectorAll('div[data-type=entrycomment]'), markElement);
     }
 
     function assertIsFunction(fn) {
@@ -1017,9 +1082,9 @@ function main() {
                 var $icon = $('<i class="fa- fa-eye"></i>');
                 var $a = $('<a ></a>')
                     .attr({
-                        'class':       'affect hide black-list-entry-hide-switch',
-                        'data-id':     id,
-                        'href':        '#',
+                        'class': 'affect hide black-list-entry-hide-switch',
+                        'data-id': id,
+                        'href': '#',
                         'data-hidden': String(blockedEntries.has(id))
                     })
                     .text(' ' + (blockedEntries.has(id) ? TEXT.SHOW : TEXT.HIDE));
@@ -1064,16 +1129,16 @@ function main() {
         var $input = $('<input />')
             .addClass()
             .attr({
-                'class':     'chk-box',
-                'type':      'checkbox',
-                'id':        id,
+                'class': 'chk-box',
+                'type': 'checkbox',
+                'id': id,
                 'data-slug': setting.slug
             })
             .prop('checked', settings[setting.slug]);
         $label = $('<label ></label>')
             .attr({
                 'class': 'inline',
-                'for':   id,
+                'for': id,
                 'title': setting.description || ''
             })
             .text(setting.name);
@@ -1108,7 +1173,7 @@ function main() {
         var id = 'my_wykop_black_list_' + setting.slug;
         var $input = $('<button class="submit">').text(setting.name).attr({
             'title': setting.description,
-            'id':    id
+            'id': id
         }).click(setting.click);
         $fieldset.append($input);
     }
@@ -1209,7 +1274,7 @@ function main() {
                     solved: String(el.solved),
                     icon: icon,
                     reason: el.reason,
-                    'solved-date':  formatDate('YYYY-MM-DD hh:mm:ss', el.solvedDate || new Date()),
+                    'solved-date': formatDate('YYYY-MM-DD hh:mm:ss', el.solvedDate || new Date()),
                     'solved-time-ago': timeAgo(el.solvedDate || new Date()),
                     'reported-date': formatDate('YYYY-MM-DD hh:mm:ss', el.firstSeen),
                     'reported-time-ago': timeAgo(el.firstSeen),
@@ -1219,9 +1284,9 @@ function main() {
             getModerated(function (moderated) {
                 moderated.forEach(function (el) {
                     var html = template(TEMPLATES.MODERATED_LI, {
-                        url:        el.url,
-                        reason:     el.reason,
-                        date:       formatDate('YYYY-MM-DD hh:mm:ss', new Date(el.moderationDate)),
+                        url: el.url,
+                        reason: el.reason,
+                        date: formatDate('YYYY-MM-DD hh:mm:ss', new Date(el.moderationDate)),
                         'time-ago': timeAgo(el.moderationDate)
                     });
                     var $li = $(html);
@@ -1237,7 +1302,7 @@ function main() {
         a.setAttribute('style', 'display: none');
         return function (data, mimeType, fileName) {
             var blob = new Blob([data], {type: 'application/octet-stream'}),
-                url  = URL.createObjectURL(blob);
+                url = URL.createObjectURL(blob);
             a.href = url;
             a.download = fileName;
             document.body.appendChild(a);
@@ -1258,16 +1323,16 @@ function main() {
             $notesList = $('ul#notesList', context);
         } else {
             var lis = $notesList.children('li');
-            WhiteList.get(function(whiteList){
-                forEach(lis, function(li){
+            WhiteList.get(function (whiteList) {
+                forEach(lis, function (li) {
                     var $li = $(li);
                     if (whiteList.usersSet.has(getTrimmedText($li.find('a b')))) {
                         $li.addClass(HIGHLIGHT_CLASS);
                     }
                 });
             });
-            BlackList.get(function(blackList){
-                forEach(lis, function(li){
+            BlackList.get(function (blackList) {
+                forEach(lis, function (li) {
                     var $li = $(li);
                     if (blackList.usersSet.has(getTrimmedText($li.find('a b')))) {
                         $li.addClass(BAD_HIGHLIGHT_CLASS);
@@ -1275,7 +1340,7 @@ function main() {
                 });
             });
             if (settings.BLACK_LIST_SORT) {
-                parseNotes().sort(sortUsersList).forEach(function(el){
+                parseNotes().sort(sortUsersList).forEach(function (el) {
                     $notesList[0].appendChild(el.domElement);
                 })
             }
@@ -1303,9 +1368,6 @@ function main() {
         }
 
 
-
-
-
         function exportToHTML() {
             var entries = parseNotes().sort(sortUsersList);
             var doc = document.implementation.createHTMLDocument();
@@ -1330,9 +1392,9 @@ function main() {
             var entries = parseNotes().sort(sortUsersList);
             saveFile(JSON.stringify({
                 currentUser: currentUser,
-                date:        formatDate('YYYY-MM-DD hh:mm'),
-                rawDate:     new Date(),
-                entries:     entries
+                date: formatDate('YYYY-MM-DD hh:mm'),
+                rawDate: new Date(),
+                entries: entries
             }, null, 2), 'application/json', fileName + '.json');
 
         }
@@ -1414,139 +1476,146 @@ function main() {
 
         var pluginSettings = [
             {
-                name:         'Włącz ulepszoną czarną listę',
-                description:  'Włącza podstawową funkcjonalność dodatku',
-                slug:         'ENHANCED_BLACK_LIST',
-                type:         'boolean',
+                name: 'Włącz ulepszoną czarną listę',
+                description: 'Włącza podstawową funkcjonalność dodatku',
+                slug: 'ENHANCED_BLACK_LIST',
+                type: 'boolean',
                 defaultValue: true
             },
             {
-                name:         'Stosuj ulepszoną czarną listę także do znalezisk',
-                description:  'Ukrywa także znaleziska',
-                slug:         'ENHANCED_BLACK_LIST_LINKS',
-                type:         'boolean',
+                name: 'Stosuj ulepszoną czarną listę także do znalezisk',
+                description: 'Ukrywa także znaleziska',
+                slug: 'ENHANCED_BLACK_LIST_LINKS',
+                type: 'boolean',
                 defaultValue: true
             },
             {
-                name:         'Zgłaszanie profili w czasie usuwania',
-                description:  'Dodaje przycisk zgłoszenia na stronie usuniętego profilu',
-                slug:         'REPORT_DELETED_ACCOUNTS',
-                type:         'boolean',
+                name: 'Zgłaszanie profili w czasie usuwania',
+                description: 'Dodaje przycisk zgłoszenia na stronie usuniętego profilu',
+                slug: 'REPORT_DELETED_ACCOUNTS',
+                type: 'boolean',
                 defaultValue: true
             },
             {
-                name:         'Sortuj użytkowników na czarnej liście',
-                description:  'Sortuje użytkowników wg koloru, a następnie wg nicka',
-                slug:         'BLACK_LIST_SORT',
-                type:         'boolean',
+                name: 'Sortuj użytkowników na czarnej liście',
+                description: 'Sortuje użytkowników wg koloru, a następnie wg nicka',
+                slug: 'BLACK_LIST_SORT',
+                type: 'boolean',
                 defaultValue: true
             },
             {
-                name:         'Podświetlaj obserwujących na liście plusujących',
-                description:  'Podświetla obserwujących na liście plusujących',
-                slug:         'HILIGHT_PLUS',
-                type:         'boolean',
+                name: 'Podświetlaj obserwujących na liście plusujących',
+                description: 'Podświetla obserwujących na liście plusujących',
+                slug: 'HILIGHT_PLUS',
+                type: 'boolean',
                 defaultValue: true
             },
             {
-                name:         'Podświetlaj obserwujących na liście wykopujących',
-                description:  'Podświetla obserwujących na liście wykopujących',
-                slug:         'HILIGHT_VOTES',
-                type:         'boolean',
+                name: 'Podświetlaj obserwujących na liście wykopujących',
+                description: 'Podświetla obserwujących na liście wykopujących',
+                slug: 'HILIGHT_VOTES',
+                type: 'boolean',
                 defaultValue: true
             },
             {
-                name:         'Podświetlaj komentarze obserwowanych w znaleziskach',
-                description:  'Podświetlanie komentarzy obserwowanych',
-                slug:         'HILIGHT_COMMENTS',
-                type:         'boolean',
+                name: 'Podświetlaj komentarze obserwowanych w znaleziskach',
+                description: 'Podświetlanie komentarzy obserwowanych',
+                slug: 'HILIGHT_COMMENTS',
+                type: 'boolean',
                 defaultValue: false
             },
             {
-                name:         'Podświetlaj komentarze obserwowanych we wpisach',
-                description:  'Podświetlanie komentarzy obserwowanych',
-                slug:         'HILIGHT_ENTRY_COMMENTS',
-                type:         'boolean',
+                name: 'Podświetlaj komentarze obserwowanych we wpisach',
+                description: 'Podświetlanie komentarzy obserwowanych',
+                slug: 'HILIGHT_ENTRY_COMMENTS',
+                type: 'boolean',
                 defaultValue: false
             },
             {
-                name:         'Blokuj przypadkowe usunięcie treści',
-                description:  'Blokuj przypadkowe usunięcie treści',
-                slug:         'PREVENT_ACCIDENTAL_REMOVE',
-                type:         'boolean',
+                name: 'Blokuj przypadkowe usunięcie treści',
+                description: 'Blokuj przypadkowe usunięcie treści',
+                slug: 'PREVENT_ACCIDENTAL_REMOVE',
+                type: 'boolean',
                 defaultValue: true
             },
             {
-                name:         'Pokazuj powiadomienia z informacjami o aktualizacji',
-                description:  '',
-                slug:         'SHOW_CHANGELOG',
-                type:         'boolean',
+                name: 'Ukrywaj wpisy z prośbą o wołanie',
+                description: 'Ukrywa wpisy z prośbą o wołanie, chyba że są skierowane do innych osób',
+                slug: 'HIDE_TACTICS',
+                type: 'boolean',
                 defaultValue: true
             },
             {
-                name:         'Pokazuj boksy z informacjami o wymoderowanych',
-                description:  'Bądź na bieżąco ze zbrodniami moderacyjnymi!',
-                slug:         'SHOW_REPORT_BOXES',
-                type:         'boolean',
+                name: 'Pokazuj powiadomienia z informacjami o aktualizacji',
+                description: '',
+                slug: 'SHOW_CHANGELOG',
+                type: 'boolean',
                 defaultValue: true
             },
             {
-                name:         'Obserwuj samego siebie',
-                description:  'Na potrzeby podświetlania itd.',
-                slug:         'OBSERVE_MYSELF',
-                type:         'boolean',
+                name: 'Pokazuj boksy z informacjami o wymoderowanych',
+                description: 'Bądź na bieżąco ze zbrodniami moderacyjnymi!',
+                slug: 'SHOW_REPORT_BOXES',
+                type: 'boolean',
                 defaultValue: true
             },
             {
-                name:         'Pozwalaj na zbieranie danych o systemie operacyjnym, przeglądarce, wersji dodatku i rozmiarach czarnej listy',
-                slug:         'ALLOW_TRACKING',
-                type:         'boolean',
+                name: 'Obserwuj samego siebie',
+                description: 'Na potrzeby podświetlania itd.',
+                slug: 'OBSERVE_MYSELF',
+                type: 'boolean',
+                defaultValue: true
+            },
+            {
+                name: 'Pozwalaj na zbieranie danych o systemie operacyjnym, przeglądarce, wersji dodatku i rozmiarach czarnej listy',
+                slug: 'ALLOW_TRACKING',
+                type: 'boolean',
                 defaultValue: false
             },
             {
-                name:         'Styl blokady',
-                description:  'Zmienia styl przycisku blokady',
-                slug:         'BLOCK_BUTTON_STYLE',
-                type:         'select',
+                name: 'Styl blokady',
+                description: 'Zmienia styl przycisku blokady',
+                slug: 'BLOCK_BUTTON_STYLE',
+                type: 'select',
                 defaultValue: 1,
-                values:       [TEXT.BLOCK_TEXT, TEXT.BLOCK_ICON]
+                values: [TEXT.BLOCK_TEXT, TEXT.BLOCK_ICON]
             },
             {
-                name:         'Styl podświetlenia plusujących',
-                description:  'Zmienia styl podświetlenia plusujących',
-                slug:         'PLUS_HILIGHT_STYLE',
-                type:         'select',
+                name: 'Styl podświetlenia plusujących',
+                description: 'Zmienia styl podświetlenia plusujących',
+                slug: 'PLUS_HILIGHT_STYLE',
+                type: 'select',
                 defaultValue: 0,
-                values:       [TEXT.HILIGHT_COLOR, TEXT.HILIGHT_ICON_STAR, TEXT.HILIGHT_BOLD]
+                values: [TEXT.HILIGHT_COLOR, TEXT.HILIGHT_ICON_STAR, TEXT.HILIGHT_BOLD]
             },
             {
-                name:         'Częstość odświeżania cache',
-                description:  'Zmienia częstość odświeżania cache.',
-                slug:         'CACHE_REFRESH_TIME',
-                type:         'select',
+                name: 'Częstość odświeżania cache',
+                description: 'Zmienia częstość odświeżania cache.',
+                slug: 'CACHE_REFRESH_TIME',
+                type: 'select',
                 defaultValue: 1,
-                values:       ['48h', '24h', '12h', '6h', '4h', '2h', '1h', '30m', '5m']
+                values: ['48h', '24h', '12h', '6h', '4h', '2h', '1h', '30m', '5m']
             },
             {
-                name:         'Styl podświetlenia komentarzy',
-                description:  'Zmienia styl podświetlania komentarzy obserwowanych',
-                slug:         'LINK_COMMENT_HILIGHT_STYLE',
-                type:         'select',
+                name: 'Styl podświetlenia komentarzy',
+                description: 'Zmienia styl podświetlania komentarzy obserwowanych',
+                slug: 'LINK_COMMENT_HILIGHT_STYLE',
+                type: 'select',
                 defaultValue: 0,
-                values:       [TEXT.HILIGHT_WARNING_BACKGROUND, TEXT.HILIGHT_BORDER_LEFT, TEXT.HILIGHT_BORDER_RAINBOW]
+                values: [TEXT.HILIGHT_WARNING_BACKGROUND, TEXT.HILIGHT_BORDER_LEFT, TEXT.HILIGHT_BORDER_RAINBOW]
             },
             {
-                name:         'Styl podświetlenia komentarzy wpisów',
-                description:  'Zmienia styl podświetlania komentarzy obserwowanych',
-                slug:         'ENTRY_COMMENT_HILIGHT_STYLE',
-                type:         'select',
+                name: 'Styl podświetlenia komentarzy wpisów',
+                description: 'Zmienia styl podświetlania komentarzy obserwowanych',
+                slug: 'ENTRY_COMMENT_HILIGHT_STYLE',
+                type: 'select',
                 defaultValue: 0,
-                values:       [TEXT.HILIGHT_WARNING_BACKGROUND, TEXT.HILIGHT_BORDER_LEFT, TEXT.HILIGHT_BORDER_RAINBOW]
+                values: [TEXT.HILIGHT_WARNING_BACKGROUND, TEXT.HILIGHT_BORDER_LEFT, TEXT.HILIGHT_BORDER_RAINBOW]
             },
             {
-                name:  'Obejrzyj ustawienia',
-                slug:  'DEBUG_SHOW_SETTINGS',
-                type:  'button',
+                name: 'Obejrzyj ustawienia',
+                slug: 'DEBUG_SHOW_SETTINGS',
+                type: 'button',
                 debug: true,
                 click: function (e) {
                     var json = {};
@@ -1559,20 +1628,20 @@ function main() {
                 }
             },
             {
-                name:        'Wyczyść listę ukrytych wpisów',
+                name: 'Wyczyść listę ukrytych wpisów',
                 description: 'Czyści listę usuniętych wpisów',
-                slug:        'CLEAR_HIDDEN_ENTRIES',
-                type:        'button',
-                click:       function () {
+                slug: 'CLEAR_HIDDEN_ENTRIES',
+                type: 'button',
+                click: function () {
                     return clearHiddenEntries(alert)
                 }
             },
             {
-                name:        'Wyczyść cache',
+                name: 'Wyczyść cache',
                 description: 'Czyści cache czarnej i białej listy, domyślnie co 24h',
-                slug:        'CLEAR_CACHE',
-                type:        'button',
-                click:       function (e) {
+                slug: 'CLEAR_CACHE',
+                type: 'button',
+                click: function (e) {
                     var a = [];
                     BlackList.flush([].push.bind(a));
                     WhiteList.flush([].push.bind(a));
@@ -1583,11 +1652,11 @@ function main() {
                 }
             },
             {
-                name:        'Pokaż dane, które można wysłać',
+                name: 'Pokaż dane, które można wysłać',
                 description: 'Pokazuje listę ustawień',
-                slug:        'SHOW_TRACK_DATA',
-                type:        'button',
-                click:       function (e) {
+                slug: 'SHOW_TRACK_DATA',
+                type: 'button',
+                click: function (e) {
                     getTrackingData();
                     e.stopPropagation();
                     e.preventDefault();
@@ -1595,10 +1664,10 @@ function main() {
                 }
             },
             {
-                name:         'Rakotwórczy użytkownicy:',
-                description:  'Blokuje rozwijanie wpisów autorstwa rakotwórczych użytkowników',
-                slug:         'CANCER_USERS',
-                type:         'open_list',
+                name: 'Rakotwórczy użytkownicy:',
+                description: 'Blokuje rozwijanie wpisów autorstwa rakotwórczych użytkowników',
+                slug: 'CANCER_USERS',
+                type: 'open_list',
                 defaultValue: []
             }
         ];
@@ -1606,49 +1675,49 @@ function main() {
         var settings = Object.create(null);
 
         Object.defineProperties(settings, {
-            '_slugs':       {
-                enumerable:   false,
+            '_slugs': {
+                enumerable: false,
                 configurable: false,
-                writable:     false,
-                value:        Object.create(null)
+                writable: false,
+                value: Object.create(null)
             },
-            getValue:       {
-                enumerable:   false,
+            getValue: {
+                enumerable: false,
                 configurable: false,
-                writable:     false,
-                value:        function getValue(code) {
+                writable: false,
+                value: function getValue(code) {
                     return this[code];
                 }
             },
-            setValue:       {
-                enumerable:   false,
+            setValue: {
+                enumerable: false,
                 configurable: false,
-                writable:     false,
-                value:        function setValue(code, val) {
+                writable: false,
+                value: function setValue(code, val) {
                     return this[code] = val;
                 }
             },
-            getSetting:     {
-                enumerable:   false,
+            getSetting: {
+                enumerable: false,
                 configurable: false,
-                writable:     false,
-                value:        function getSetting(code) {
+                writable: false,
+                value: function getSetting(code) {
                     return this._slugs[code];
                 }
             },
-            list:           {
-                enumerable:   false,
+            list: {
+                enumerable: false,
                 configurable: false,
-                writable:     false,
-                value:        function list() {
+                writable: false,
+                value: function list() {
                     return pluginSettings;
                 }
             },
             isDefaultValue: {
-                enumerable:   false,
+                enumerable: false,
                 configurable: false,
-                writable:     false,
-                value:        function isDefaultValue(code) {
+                writable: false,
+                value: function isDefaultValue(code) {
                     return localStorage['black_list/' + code] === undefined;
                 }
             }
@@ -1657,10 +1726,10 @@ function main() {
         pluginSettings.forEach(function defineSetting(el) {
             settings._slugs[el.slug] = el; // Szybki dostęp do list ustawień.
             Object.defineProperty(settings, el.slug, {
-                enumerable:   true,
+                enumerable: true,
                 configurable: false,
-                get:          createSettingGetter(el.slug),
-                set:          createSettingSetter(el.slug)
+                get: createSettingGetter(el.slug),
+                set: createSettingSetter(el.slug)
             });
         });
         Object.freeze(pluginSettings);
@@ -1709,7 +1778,7 @@ function main() {
     $input.prop('checked', !!settings.ENHANCED_BLACK_LIST);
     setSwitch.call($input[0]);
     var style = document.createElement('style');
-    var baseStyleHTML = function () {/*
+    var addonCSS = function () {/*
 
      body.black_list_on .ginden_black_list {display: none; }
      #black_list_toggle {display: none}
@@ -1773,9 +1842,12 @@ function main() {
      span.report-solved-state-false {
      color: red;
      }
+     .tactic-entry {
+     display: none;
+     }
      */
     }.toString();
-    style.innerHTML = baseStyleHTML.slice(baseStyleHTML.indexOf('/*') + 2, baseStyleHTML.lastIndexOf('*/'));
+    style.innerHTML = addonCSS.slice(addonCSS.indexOf('/*') + 2, addonCSS.lastIndexOf('*/'));
     document.head.appendChild(style);
     var $blackListToggleCont = $('<li id="black_list_toggle_cont">').append($input, $label);
 
@@ -1785,41 +1857,41 @@ function main() {
         window.wykop.plugins.Ginden.bus = window.wykop.plugins.Ginden.bus || {};
         window.wykop.plugins.Ginden.bus.onNextFrame = onNextFrame;
         window.wykop.plugins.Ginden.MojWykopBlackList = {
-            parseBlackList:      BlackList.parse,
-            getBlackList:        BlackList.get,
-            removeEntries:       removeEntries,
-            getWhiteList:        WhiteList.get,
+            parseBlackList: BlackList.parse,
+            getBlackList: BlackList.get,
+            removeEntries: removeEntries,
+            getWhiteList: WhiteList.get,
             flushBlackListCache: BlackList.flush,
             flushWhiteListCache: WhiteList.flush,
-            getTrackingData:     getTrackingData,
-            SmartStorage:        SmartStorage,
-            settings:            settings,
-            main:                main
+            getTrackingData: getTrackingData,
+            SmartStorage: SmartStorage,
+            settings: settings,
+            main: main
         };
     }
 
     var router = {
-        'mywykop\/(?!usernotes)(.*)':          function (action, method) {
+        'mywykop\/(?!usernotes)(.*)': function (action, method) {
             $('.bspace ul').last().append($blackListToggleCont);
             BlackList.get(removeEntries);
             if (settings.SHOW_REPORT_BOXES) {
                 appendReportsBox();
             }
         },
-        'tag/.*':              function (action, method) {
+        'tag/.*': function (action, method) {
             $('.fix-b-border > ul').last().append(
                 $blackListToggleCont
             );
             BlackList.get(removeEntries);
         },
-        'profile/.*':          function (action, method) {
+        'profile/.*': function (action, method) {
             var $blackListToggleCont = $('<span id="black_list_toggle_cont">').append($input, $label);
             $('h4.space').last().append(
                 $blackListToggleCont
             );
             BlackList.get(removeEntries);
         },
-        'stream/(index|hot|active)':  function (action, method) {
+        'stream/(index|hot|active)': function (action, method) {
             $('.bspace ul').last().append($blackListToggleCont);
             BlackList.get(removeEntries);
         },
@@ -1828,7 +1900,7 @@ function main() {
                 sortBlackListEntries(document.querySelector('div.space[data-type="users"]'));
             }
         },
-        'error/404':           function () {
+        'error/404': function () {
             if (settings.REPORT_DELETED_ACCOUNTS && location.pathname.match(/\/ludzie\/.*\//)) {
                 var user = (location.pathname.match(/\/ludzie\/(.*)\//) || [])[1];
                 $('h4.bspace + p > a.button').after(
@@ -1836,9 +1908,9 @@ function main() {
                 );
             }
         },
-        'settings/index':      addSettingsToHTML,
-        'mywykop/usernotes':   addUserNotesExport,
-        'link/.*':             function () {
+        'settings/index': addSettingsToHTML,
+        'mywykop/usernotes': addUserNotesExport,
+        'link/.*': function () {
             if (settings.HILIGHT_COMMENTS) {
                 WhiteList.get(highlightLinkComments);
             }
@@ -1866,6 +1938,11 @@ function main() {
         if (settings.PREVENT_ACCIDENTAL_REMOVE && typeof WeakMap === 'function') {
             preventAccidentalTabClose();
         }
+        if (settings.HIDE_TACTICS && document.querySelector('li.entry')) {
+            hideTacticalComments();
+        }
+
+
         if (settings.CANCER_USERS.length > 0) {
             document.addEventListener('click', preventCancerOpen, true);
         }
